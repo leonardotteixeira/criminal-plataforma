@@ -11,17 +11,20 @@ from . import db
 from .analysis import completo_ate
 from .analysis import router as analysis_router
 from .previsao import router as previsao_router
+from .qualidade import router as qualidade_router
+from .radar import router as radar_router
 from .schemas import (
     Categoria,
     Cell,
     HeatmapResponse,
     HourDowCell,
     Meta,
+    MunicipioRef,
     MunicipioRow,
     Page,
     SeriesPoint,
 )
-from .settings import CORS_ORIGINS, K_MIN
+from .settings import BRAND, CELL_ROUND, CORS_ORIGINS, K_MIN
 
 CATEGORIAS = {
     "roubo": "Roubo",
@@ -51,6 +54,8 @@ app.add_middleware(
 
 app.include_router(analysis_router)
 app.include_router(previsao_router)
+app.include_router(radar_router)
+app.include_router(qualidade_router)
 
 
 def _ascii(s: str) -> str:
@@ -59,7 +64,19 @@ def _ascii(s: str) -> str:
 
 @db.ttl_cache
 def _dados_ate() -> date:
-    return db.query("SELECT max(semana) + 6 AS d FROM mun_week")[0]["d"]
+    """Fim da última semana com volume não residual (definido no pipeline, gold/meta)."""
+    return db.query("SELECT dados_ate AS d FROM meta")[0]["d"]
+
+
+def arredondar_celula(n: int) -> int:
+    """Arredonda a contagem de um hexágono para o múltiplo de CELL_ROUND mais próximo (mín. k).
+
+    Aplicado depois do teste k-mínimo, sobre o total do filtro. A diferença entre duas janelas
+    passa a ter incerteza de ±CELL_ROUND, o que impede recuperar contagens pequenas por subtração.
+    """
+    if CELL_ROUND <= 1:
+        return n
+    return max(K_MIN, CELL_ROUND * round(n / CELL_ROUND))
 
 
 def _periodo(inicio: date | None, fim: date | None) -> tuple[date, date]:
@@ -78,10 +95,14 @@ def _check_cat(categoria: str | None) -> None:
 
 @app.get("/v1/meta", response_model=Meta, tags=["meta"])
 def meta() -> Meta:
+    v = db.query("SELECT fonte_atualizada_em, processado_em FROM meta")[0]
     return Meta(
-        marca="SinalBR",
+        marca=BRAND,
         dados_ate=_dados_ate(),
         completo_ate=completo_ate(),
+        fonte_atualizada_em=v["fonte_atualizada_em"],
+        processado_em=v["processado_em"],
+        arredondamento_celulas=CELL_ROUND,
         k_min=K_MIN,
         categorias=list(CATEGORIAS),
         avisos=AVISOS,
@@ -102,7 +123,10 @@ def _heatmap(inicio: date, fim: date, categoria: str | None, limit: int) -> tupl
     rows = db.query(
         f"SELECT h3, sum(n)::INTEGER AS n FROM cell_month WHERE {where} GROUP BY h3", params
     )
-    kept = sorted((r for r in rows if r["n"] >= K_MIN), key=lambda r: -r["n"])
+    kept = sorted(
+        ({"h3": r["h3"], "n": arredondar_celula(r["n"])} for r in rows if r["n"] >= K_MIN),
+        key=lambda r: -r["n"],
+    )
     return len(rows), len(rows) - len(kept), kept[:limit]
 
 
@@ -121,6 +145,7 @@ def heatmap(
         fim=fim,
         categoria=categoria,
         k_min=K_MIN,
+        arredondamento=CELL_ROUND,
         celulas_total=total,
         celulas_suprimidas=suprimidas,
         cells=[Cell(**r) for r in kept],
@@ -160,6 +185,17 @@ def _mun_rows(categoria, inicio, fim, busca, ordenar, limit, offset) -> tuple[in
         [*params, *name_params, limit, offset],
     )
     return total, rows
+
+
+@app.get("/v1/municipios/lista", response_model=list[MunicipioRef], tags=["territorio"])
+def municipios_lista() -> list[MunicipioRef]:
+    """Todos os municípios (para busca/seleção). Não contém contagens."""
+    return [
+        MunicipioRef(**r)
+        for r in db.query(
+            "SELECT cd_ibge, municipio, populacao_2022 FROM municipios ORDER BY municipio"
+        )
+    ]
 
 
 @app.get("/v1/municipios", response_model=Page[MunicipioRow], tags=["territorio"])

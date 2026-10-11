@@ -62,6 +62,7 @@ class BacktestResponse(BaseModel):
 
 @router.get("/h3", response_model=PrevisaoResponse)
 def previsao(categoria: str = Query("roubo", pattern="^(roubo|furto|lesao_corporal)$")):
+    db.require("previsao")
     rows = db.query(
         "SELECT h3, esperado_4s, faixa, origem, inicio_previsao, fim_previsao "
         "FROM previsao WHERE categoria = ? ORDER BY esperado_4s DESC",
@@ -84,6 +85,7 @@ def previsao(categoria: str = Query("roubo", pattern="^(roubo|furto|lesao_corpor
 
 @router.get("/backtest", response_model=BacktestResponse)
 def backtest(categoria: str = Query("roubo", pattern="^(roubo|furto|lesao_corporal)$")):
+    db.require("backtest", "backtest_calibracao")
     rows = db.query(
         "SELECT modelo, desvio_poisson, mae, captura_top10, origens_melhor_que_media12_pct, "
         "n_obs, n_origens FROM backtest WHERE categoria = ? ORDER BY desvio_poisson DESC",

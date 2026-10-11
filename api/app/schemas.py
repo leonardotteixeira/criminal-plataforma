@@ -6,9 +6,18 @@ from pydantic import BaseModel, Field
 
 class Meta(BaseModel):
     marca: str
-    dados_ate: date = Field(description="Data do fato mais recente presente nos dados.")
+    dados_ate: date = Field(
+        description="Fim da última semana com volume não residual (ignora registros soltos)."
+    )
     completo_ate: date = Field(description="Última data com dados considerados completos.")
     k_min: int = Field(description="Células com menos ocorrências que isso nunca são exibidas.")
+    fonte_atualizada_em: str | None = Field(
+        None, description="Data de modificação mais recente dos arquivos da SSP (versão da fonte)."
+    )
+    processado_em: str | None = Field(None, description="Quando o pipeline gerou os dados.")
+    arredondamento_celulas: int = Field(
+        description="Contagens de hexágono são múltiplos deste valor (proteção contra diferenciação)."
+    )
     categorias: list[str]
     avisos: list[str]
 
@@ -28,9 +37,16 @@ class HeatmapResponse(BaseModel):
     fim: date
     categoria: str | None
     k_min: int
+    arredondamento: int = Field(description="Contagens arredondadas para múltiplos deste valor.")
     celulas_total: int
     celulas_suprimidas: int
     cells: list[Cell]
+
+
+class MunicipioRef(BaseModel):
+    cd_ibge: int
+    municipio: str
+    populacao_2022: int | None
 
 
 class MunicipioRow(BaseModel):
