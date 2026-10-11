@@ -2,7 +2,7 @@
 
 Plataforma de inteligência criminal construída **somente com dados abertos, agregados e anonimizados** (SSP-SP + IBGE). Nome provisório; a marca é centralizada em `web/src/config/brand.ts`.
 
-> **Status: Fases 1 a 3 concluídas** (pipeline, API, mapa de calor, análises, anomalias e previsão de risco com backtest, tudo com dados reais). Métodos em [`docs/analises.md`](docs/analises.md) e [`docs/previsao.md`](docs/previsao.md). Veja [`docs/plano.md`](docs/plano.md) para as próximas fases.
+> **Status: Fases 1 a 4 concluídas** (pipeline, API, mapa de calor, análises, anomalias, previsão com backtest, landing, exportação PDF/CSV e testes de frontend, tudo com dados reais). Métodos em [`docs/analises.md`](docs/analises.md) e [`docs/previsao.md`](docs/previsao.md). Veja [`docs/plano.md`](docs/plano.md) para as próximas fases.
 
 ## Limitações — leia antes de usar
 
@@ -48,7 +48,9 @@ cd ../api && uv sync && uv run uvicorn app.main:app --port 8000
 cd ../web && npm install && npm run dev
 ```
 
-Testes: `cd data && uv run pytest`, `cd api && uv run pytest`.
+Testes: `cd data && uv run pytest`, `cd api && uv run pytest`, `cd web && npm test`.
+
+**Exportação:** no painel, "Relatório (PDF)" abre uma página imprimível (mapa estático, série, ranking e limitações; use *Imprimir → Salvar como PDF*) e "CSV" baixa o ranking por município (`/v1/export/municipios.csv` e `/v1/export/celulas.csv`, UTF-8 com BOM, já com supressão k-mínimo).
 
 ## Decisões técnicas
 
@@ -59,4 +61,4 @@ Testes: `cd data && uv run pytest`, `cd api && uv run pytest`.
 
 ## Ainda não implementado
 
-Landing completa, exportação PDF/CSV, Docker Compose, CI e pre-commit (Fases 4–5).
+Docker Compose, CI, pre-commit, screenshots e diagrama final (Fase 5).

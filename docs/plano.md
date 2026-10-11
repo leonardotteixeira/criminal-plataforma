@@ -10,5 +10,5 @@ Fontes confirmadas (testadas em 2026-10-10):
 | 1 ✅ | Pipeline bronze/silver/gold + API mínima + mapa de calor no navegador | Dados reais 2022–2026 ingeridos; relatório de qualidade; H3 com k-mínimo; mapa exibe células |
 | 2 ✅ | Análises: temporal, comparação normalizada, anomalias | Endpoints + testes; resultados validados |
 | 3 ✅ | Previsão de risco com backtesting | Baseline vs. modelo, métricas honestas |
-| 4 | Landing, dashboard completo, PDF/CSV, dark mode, a11y | Lighthouse a11y razoável |
+| 4 ✅ | Landing, dashboard completo, PDF/CSV, dark mode, a11y | Lighthouse a11y razoável |
 | 5 | Docker, CI, pre-commit, README com screenshots | CI verde |

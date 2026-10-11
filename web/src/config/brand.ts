@@ -13,3 +13,11 @@ export const disclaimers = [
   "Modelos preditivos podem reforçar vieses de policiamento. Use as análises para entender padrões, não para decidir sobre pessoas.",
   "Dados agregados em hexágonos (~0,7 km²) e municípios; células com poucas ocorrências são ocultadas. Meses recentes são parciais.",
 ];
+
+// Números reais do piloto (ver docs/qualidade-dados.md e docs/previsao.md). Atualize ao reprocessar.
+export const stats = {
+  registros: "5,5 mi",
+  periodo: "2022–2026",
+  municipios: "645",
+  kMin: 5,
+};

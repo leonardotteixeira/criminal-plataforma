@@ -10,6 +10,7 @@ import {
   ForecastTab,
   TimeTab,
 } from "@/components/AnalysisTabs";
+import { monthsBack } from "@/lib/dates";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { brand, disclaimers } from "@/config/brand";
 import {
@@ -31,17 +32,11 @@ const HeatMap = dynamic(
 );
 
 const PERIODOS = [
-  { id: 3, label: "Últimos 3 meses" },
-  { id: 6, label: "Últimos 6 meses" },
-  { id: 12, label: "Últimos 12 meses" },
-  { id: 24, label: "Últimos 24 meses" },
+  { id: 3, label: "3 meses" },
+  { id: 6, label: "6 meses" },
+  { id: 12, label: "12 meses" },
+  { id: 24, label: "24 meses" },
 ];
-
-function monthsBack(fim: string, n: number) {
-  const d = new Date(fim + "T00:00:00");
-  d.setMonth(d.getMonth() - n + 1, 1);
-  return d.toISOString().slice(0, 10);
-}
 
 export default function Dashboard() {
   const [meta, setMeta] = useState<Meta | null>(null);
@@ -116,16 +111,32 @@ export default function Dashboard() {
         <Link href="/" className="font-semibold tracking-tight">
           {brand.name} <span className="font-normal text-muted">· Painel</span>
         </Link>
-        <ThemeToggle />
+        <nav aria-label="Exportar" className="flex items-center gap-2 text-sm">
+          <Link
+            href={`/relatorio?categoria=${categoria}&meses=${meses}`}
+            className="rounded-md border border-border px-3 py-1.5 hover:bg-background"
+          >
+            Relatório (PDF)
+          </Link>
+          {meta && (
+            <a
+              className="hidden rounded-md border border-border px-3 py-1.5 hover:bg-background sm:inline-block"
+              href={`${brand.apiUrl}/v1/export/municipios.csv?categoria=${categoria}&inicio=${monthsBack(meta.dados_ate, meses)}&fim=${meta.dados_ate}`}
+            >
+              CSV
+            </a>
+          )}
+          <ThemeToggle />
+        </nav>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <main className="relative min-h-[50vh] flex-1">
-          <div className="absolute left-3 top-3 z-10 flex flex-wrap gap-2 rounded-lg border border-border bg-surface/95 p-2 shadow">
-            <label className="text-xs text-muted">
+          <div className="absolute left-2 right-14 top-2 z-10 flex gap-2 sm:left-3 sm:right-auto sm:top-3 rounded-lg border border-border bg-surface/95 p-2 shadow">
+            <label className="min-w-0 flex-1 text-xs text-muted sm:flex-none">
               Tipo de crime
               <select
-                className="mt-0.5 block rounded border border-border bg-surface px-2 py-1 text-sm text-foreground"
+                className="mt-0.5 block w-full min-w-0 rounded border border-border bg-surface px-2 py-1 text-sm text-foreground"
                 value={categoria}
                 onChange={(e) => setCategoria(e.target.value)}
               >
@@ -136,10 +147,10 @@ export default function Dashboard() {
                 ))}
               </select>
             </label>
-            <label className="text-xs text-muted">
-              Período
+            <label className="min-w-0 flex-1 text-xs text-muted sm:flex-none">
+              Período (últimos)
               <select
-                className="mt-0.5 block rounded border border-border bg-surface px-2 py-1 text-sm text-foreground"
+                className="mt-0.5 block w-full min-w-0 rounded border border-border bg-surface px-2 py-1 text-sm text-foreground"
                 value={meses}
                 onChange={(e) => setMeses(Number(e.target.value))}
               >

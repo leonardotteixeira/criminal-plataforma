@@ -202,3 +202,22 @@ def test_backtest_reports_gain_and_ceiling_honestly(client):
     assert r["captura_teto_oraculo"] == 0.4
     assert all(m["modelo"] != "oraculo" for m in r["modelos"])
     assert len(r["calibracao"]) == 10 and "persistentes" in r["leitura"]
+
+
+def test_export_municipios_csv_has_bom_metadata_and_suppression(client):
+    r = client.get(
+        "/v1/export/municipios.csv", params={"categoria": "roubo", "inicio": "2026-05-01"}
+    )
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
+    assert "attachment" in r.headers["content-disposition"]
+    text = r.content.decode("utf-8")
+    assert text.startswith("﻿# ") and "suprimidos" in text
+    lines = [ln for ln in text.splitlines() if not ln.lstrip("﻿").startswith("#")]
+    assert lines[0].startswith("cd_ibge,municipio")
+    assert any(ln.startswith("3509502,Campinas,") and ln.endswith("True") for ln in lines)
+
+
+def test_export_celulas_csv_only_includes_cells_above_k(client):
+    r = client.get("/v1/export/celulas.csv", params={"categoria": "roubo", "inicio": "2026-05-01"})
+    rows = [ln for ln in r.text.splitlines() if ln and not ln.lstrip("﻿").startswith("#")]
+    assert rows[0] == "h3_res8,ocorrencias" and rows[1:] == ["88a8100c07fffff,12"]

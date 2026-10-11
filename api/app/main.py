@@ -1,8 +1,11 @@
+import csv
+import io
 import unicodedata
 from datetime import date
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from . import db
 from .analysis import completo_ate
@@ -124,16 +127,8 @@ def heatmap(
     )
 
 
-@app.get("/v1/municipios", response_model=Page[MunicipioRow], tags=["territorio"])
-def municipios(
-    categoria: str | None = None,
-    inicio: date | None = None,
-    fim: date | None = None,
-    busca: str | None = Query(None, min_length=2, description="Filtro por nome."),
-    ordenar: str = Query("taxa_100k", pattern="^(taxa_100k|ocorrencias|municipio)$"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
-) -> Page[MunicipioRow]:
+def _mun_rows(categoria, inicio, fim, busca, ordenar, limit, offset) -> tuple[int, list[dict]]:
+    """Consulta de municípios com taxa por 100 mil hab. e supressão k-mínimo."""
     _check_cat(categoria)
     inicio, fim = _periodo(inicio, fim)
     where, params = "mes >= ? AND mes <= ?", [inicio, fim]
@@ -162,10 +157,74 @@ def municipios(
     total = db.query(f"SELECT count(*) AS c FROM ({base})", params + name_params)[0]["c"]
     rows = db.query(
         f"SELECT * FROM ({base}) ORDER BY {order}, municipio LIMIT ? OFFSET ?",
-        [*params, *name_params, page_size, (page - 1) * page_size],
+        [*params, *name_params, limit, offset],
+    )
+    return total, rows
+
+
+@app.get("/v1/municipios", response_model=Page[MunicipioRow], tags=["territorio"])
+def municipios(
+    categoria: str | None = None,
+    inicio: date | None = None,
+    fim: date | None = None,
+    busca: str | None = Query(None, min_length=2, description="Filtro por nome."),
+    ordenar: str = Query("taxa_100k", pattern="^(taxa_100k|ocorrencias|municipio)$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+) -> Page[MunicipioRow]:
+    total, rows = _mun_rows(
+        categoria, inicio, fim, busca, ordenar, page_size, (page - 1) * page_size
     )
     return Page(
         items=[MunicipioRow(**r) for r in rows], total=total, page=page, page_size=page_size
+    )
+
+
+def _csv(header: list[str], rows: list[list], filename: str, comment: str) -> Response:
+    """CSV UTF-8 com BOM (abre direto no Excel) e linhas de metadados iniciadas em '#'."""
+    buf = io.StringIO()
+    buf.write(f"# {comment}\n")
+    buf.write(f"# Fonte: SSP-SP e IBGE. Dados agregados; valores < {K_MIN} suprimidos.\n")
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(header)
+    w.writerows(rows)
+    return Response(
+        content="﻿" + buf.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/v1/export/municipios.csv", tags=["exportacao"])
+def export_municipios(
+    categoria: str | None = None, inicio: date | None = None, fim: date | None = None
+) -> Response:
+    inicio, fim = _periodo(inicio, fim)
+    _, rows = _mun_rows(categoria, inicio, fim, None, "municipio", 1000, 0)
+    return _csv(
+        ["cd_ibge", "municipio", "populacao_2022", "ocorrencias", "taxa_100k", "suprimido"],
+        [
+            [r["cd_ibge"], r["municipio"], r["populacao_2022"], r["ocorrencias"],
+             r["taxa_100k"], r["suprimido"]]
+            for r in rows
+        ],
+        f"sinalbr_municipios_{categoria or 'todos'}_{inicio}_{fim}.csv",
+        f"Ocorrências por município, {categoria or 'todos os crimes'}, {inicio} a {fim}",
+    )  # fmt: skip
+
+
+@app.get("/v1/export/celulas.csv", tags=["exportacao"])
+def export_celulas(
+    categoria: str | None = None, inicio: date | None = None, fim: date | None = None
+) -> Response:
+    _check_cat(categoria)
+    inicio, fim = _periodo(inicio, fim)
+    _, _, kept = _heatmap(inicio, fim, categoria, 60000)
+    return _csv(
+        ["h3_res8", "ocorrencias"],
+        [[r["h3"], r["n"]] for r in kept],
+        f"sinalbr_celulas_{categoria or 'todos'}_{inicio}_{fim}.csv",
+        f"Ocorrências por hexágono H3 res. 8 (~0,7 km²), {categoria or 'todos'}, {inicio} a {fim}",
     )
 
 

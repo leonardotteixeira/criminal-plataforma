@@ -41,3 +41,30 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+@media print {
+  :root {
+    --background: #ffffff;
+    --foreground: #14181f;
+    --surface: #ffffff;
+    --muted: #4a5360;
+    --border: #cfd5dc;
+    --accent: #0b6e6e;
+  }
+  body {
+    background: #fff;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

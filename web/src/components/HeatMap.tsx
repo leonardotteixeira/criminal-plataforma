@@ -6,6 +6,7 @@ import * as maplibregl from "maplibre-gl";
 import { useEffect, useMemo, useRef } from "react";
 import type { Cell } from "@/lib/api";
 import { rampColor } from "@/components/colorRamp";
+import { scaleMax } from "@/components/scale";
 import { useDark } from "@/lib/useDark";
 
 // O worker padrão não carrega sob o bundler; servimos o ESM copiado para /public.
@@ -15,12 +16,6 @@ const STYLE_LIGHT =
   "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json";
 const STYLE_DARK =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
-
-export function scaleMax(cells: Cell[]): number {
-  if (!cells.length) return 1;
-  const sorted = cells.map((c) => c.n).sort((a, b) => a - b);
-  return Math.max(sorted[Math.floor(sorted.length * 0.98)] ?? 1, 2);
-}
 
 export type MapCell = Cell & { faixa?: string };
 
@@ -46,7 +41,7 @@ export function HeatMap({
       container: container.current,
       style: STYLE_LIGHT,
       center: [-46.64, -23.55],
-      zoom: 9.2,
+      zoom: window.innerWidth < 640 ? 8.2 : 9.2,
       attributionControl: { compact: true },
     });
     map.addControl(
