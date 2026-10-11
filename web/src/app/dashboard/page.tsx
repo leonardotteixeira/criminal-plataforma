@@ -12,6 +12,7 @@ import {
   TimeTab,
 } from "@/components/AnalysisTabs";
 import { AppHeader } from "@/components/AppHeader";
+import { InvestigateTab } from "@/components/InvestigateTab";
 import { MunicipioPicker } from "@/components/MunicipioPicker";
 import { SaveViewButton } from "@/components/SavedViews";
 import {
@@ -48,10 +49,11 @@ const HeatMap = dynamic(
 );
 
 const PERIODOS = [3, 6, 12, 24];
-type Tab = "geral" | "tempo" | "alertas" | "previsao";
+type Tab = "geral" | "tempo" | "investigar" | "alertas" | "previsao";
 const TABS: { id: Tab; label: string }[] = [
   { id: "geral", label: "Visão geral" },
   { id: "tempo", label: "Tempo" },
+  { id: "investigar", label: "Investigar" },
   { id: "alertas", label: "Alertas" },
   { id: "previsao", label: "Previsão" },
 ];
@@ -259,7 +261,7 @@ function DashboardInner() {
                 : (heat?.cells ?? [])
             }
           />
-          <p className="pointer-events-none absolute right-14 top-3 hidden max-w-[17rem] rounded-md border border-border bg-surface/90 p-2 text-xs text-muted shadow md:block">
+          <p className="pointer-events-none absolute bottom-9 right-3 hidden max-w-[17rem] rounded-md border border-border bg-surface/90 p-2 text-xs text-muted shadow lg:block">
             {showForecast ? (
               <>
                 <strong className="text-foreground">
@@ -343,6 +345,14 @@ function DashboardInner() {
               cdIbge={selId}
               municipio={sel?.municipio ?? null}
               completoAte={meta.completo_ate}
+            />
+          )}
+          {tab === "investigar" && (
+            <InvestigateTab
+              categoria={categoria}
+              nomeCategoria={nomeCat}
+              cdIbge={selId}
+              municipio={sel?.municipio ?? null}
             />
           )}
           {tab === "previsao" && (

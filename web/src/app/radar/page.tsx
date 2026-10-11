@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { MunicipioPicker } from "@/components/MunicipioPicker";
 import { SavedNote, SavedViewsList } from "@/components/SavedViews";
+import { HistoryLine, SignalGlossary } from "@/components/Signals";
 import {
   Badge,
   Card,
@@ -103,6 +103,7 @@ function Item({ i }: { i: RadarItem }) {
         {i.titulo}
       </h3>
       <p className="mt-1 text-sm text-muted">{i.explicacao}</p>
+      {i.historico && <HistoryLine h={i.historico} />}
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         <TextLink href={link.href}>{link.label} →</TextLink>
         {i.cd_ibge && (
@@ -257,6 +258,54 @@ function RadarInner() {
                       </Card>
                     );
                   })}
+                  <Card
+                    title={
+                      <>
+                        Deixaram de ser detectados{" "}
+                        <span className="font-normal text-muted">
+                          ({fmtInt(r.data.deixaram_de_ser_detectados.length)})
+                        </span>
+                      </>
+                    }
+                    description="Mudanças persistentes presentes na avaliação anterior (4 semanas antes) e não na atual, com a série ainda avaliável."
+                  >
+                    {!r.data.historico_disponivel ? (
+                      <p className="text-sm text-muted">
+                        Histórico ainda não gerado (etapa “history” do
+                        pipeline).
+                      </p>
+                    ) : r.data.deixaram_de_ser_detectados.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-border p-3 text-sm text-muted">
+                        Nenhuma mudança deixou de ser detectada desde a
+                        avaliação anterior.
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-border text-sm">
+                        {r.data.deixaram_de_ser_detectados.map((e) => (
+                          <li
+                            key={`${e.cd_ibge}-${e.categoria}-${e.direcao}`}
+                            className="flex flex-wrap justify-between gap-2 py-1.5"
+                          >
+                            <span>
+                              <strong>{e.municipio}</strong> ·{" "}
+                              {e.categoria_nome ?? e.categoria}
+                              {e.direcao &&
+                                ` (${e.direcao === "alta" ? "mais" : "menos"} registros)`}
+                            </span>
+                            <span className="text-xs text-muted">
+                              última detecção {fmtDate(e.ultima_deteccao)} ·{" "}
+                              {e.deteccoes} avaliação(ões)
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <p className="mt-3 text-xs text-muted">
+                      Deixar de ser detectado significa que o critério
+                      estatístico deixou de ser atendido, não que a situação foi
+                      resolvida. Histórico reconstruído com os dados atuais.
+                    </p>
+                  </Card>
                 </>
               )}
             </StateMessage>
@@ -269,33 +318,8 @@ function RadarInner() {
                 <SavedNote />
               </div>
             </Card>
-            <Card title="Tipos de observação">
-              <dl className="space-y-2 text-sm">
-                <div>
-                  <dt className="font-medium">Pico semanal</dt>
-                  <dd className="text-muted">
-                    Uma semana fora do comum. Pode ser um evento ou um lote de
-                    registros.
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-medium">Mudança persistente</dt>
-                  <dd className="text-muted">
-                    Novo patamar sustentado por semanas, descontado o movimento
-                    do estado. Detalhes e avaliação em{" "}
-                    <Link className="underline" href="/qualidade#mudancas">
-                      Qualidade
-                    </Link>
-                    .
-                  </dd>
-                </div>
-                <div>
-                  <dt className="font-medium">Variação anual</dt>
-                  <dd className="text-muted">
-                    12 meses contra 12 meses, comparada ao estado. Descritiva.
-                  </dd>
-                </div>
-              </dl>
+            <Card title="Como diferenciar os sinais">
+              <SignalGlossary />
             </Card>
           </aside>
         </div>

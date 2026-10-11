@@ -139,16 +139,14 @@ describe("cliente da API", () => {
   it("503 do pipeline mostra o detalhe explicando a etapa", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(
-            JSON.stringify({
-              detail: "Rode a etapa: python -m sinalbr_data changes",
-            }),
-            { status: 503 },
-          ),
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            detail: "Rode a etapa: python -m sinalbr_data changes",
+          }),
+          { status: 503 },
         ),
+      ),
     );
     const err = await analysis.radar({}).catch((e) => e);
     expect(err.status).toBe(503);

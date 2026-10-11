@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { AppHeader } from "@/components/AppHeader";
+import { MethodComparison } from "@/components/MethodComparison";
 import {
   Badge,
   Card,
@@ -75,7 +76,12 @@ export default function QualidadePage() {
           </p>
         </div>
 
-        <StateMessage loading={q.loading} error={q.error} onRetry={q.retry}>
+        {/* Renderiza tudo de uma vez (qualidade + avaliação): evita deslocamento de layout. */}
+        <StateMessage
+          loading={q.loading || (mud.loading && !mud.error)}
+          error={q.error}
+          onRetry={q.retry}
+        >
           {q.data && (
             <>
               <Card title="Versão dos dados">
@@ -355,148 +361,156 @@ export default function QualidadePage() {
           )}
         </StateMessage>
 
-        <section id="mudancas" className="scroll-mt-4">
-          <Card
-            title="Avaliação do detector de mudanças persistentes"
-            description="Usado no Radar. Só é exibido para tipos em que a avaliação sustenta o sinal."
-          >
-            <StateMessage
-              loading={mud.loading}
-              error={mud.error}
-              onRetry={mud.retry}
+        {q.data && (
+          <section id="mudancas" className="scroll-mt-4">
+            <Card
+              title="Avaliação do detector de mudanças persistentes (método em produção)"
+              description="Usado no Radar. Só é exibido para tipos em que a avaliação sustenta o sinal."
             >
-              {mud.data && (
-                <div className="space-y-5">
-                  <p className="text-sm text-muted">{mud.data.metodo}</p>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[40rem] text-sm">
-                      <caption className="mb-2 text-left text-sm font-medium">
-                        Retrospectiva nos dados reais: o sinal se manteve nas 8
-                        semanas seguintes?
-                      </caption>
-                      <thead>
-                        <tr className="border-b border-border text-left text-xs text-muted">
-                          <th scope="col" className="py-2">
-                            Tipo
-                          </th>
-                          <th scope="col" className="text-right">
-                            Séries avaliadas
-                          </th>
-                          <th scope="col" className="text-right">
-                            Sinais
-                          </th>
-                          <th scope="col" className="text-right">
-                            Confirmados
-                          </th>
-                          <th scope="col" className="text-right">
-                            Por acaso
-                          </th>
-                          <th scope="col" className="text-right">
-                            Referência simples
-                          </th>
-                          <th scope="col" className="text-right">
-                            Usado no Radar
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {mud.data.avaliacao.map((a) => (
-                          <tr
-                            key={a.categoria}
-                            className="border-b border-border/60"
-                          >
-                            <th
-                              scope="row"
-                              className="py-2 text-left font-medium"
-                            >
-                              {NOMES[a.categoria] ?? a.categoria}
+              <StateMessage
+                loading={mud.loading}
+                error={mud.error}
+                onRetry={mud.retry}
+              >
+                {mud.data && (
+                  <div className="space-y-5">
+                    <p className="text-sm text-muted">{mud.data.metodo}</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[40rem] text-sm">
+                        <caption className="mb-2 text-left text-sm font-medium">
+                          Retrospectiva nos dados reais: o sinal se manteve nas
+                          8 semanas seguintes?
+                        </caption>
+                        <thead>
+                          <tr className="border-b border-border text-left text-xs text-muted">
+                            <th scope="col" className="py-2">
+                              Tipo
                             </th>
-                            <td className="text-right tabular-nums">
-                              {fmtInt(a.series_avaliadas)}
-                            </td>
-                            <td className="text-right tabular-nums">
-                              {fmtInt(a.sinais)}
-                            </td>
-                            <td className="text-right">
-                              <Pct v={a.confirmados_pct} />
-                            </td>
-                            <td className="text-right">
-                              <Pct v={a.confirmacao_acaso_pct} />
-                            </td>
-                            <td className="text-right tabular-nums">
-                              {a.referencia_confirmados_pct == null
-                                ? "—"
-                                : `${fmtNum(a.referencia_confirmados_pct)}% (acaso ${fmtNum(a.referencia_confirmacao_acaso_pct)}%)`}
-                            </td>
-                            <td className="text-right">
-                              {a.confiavel ? "Sim" : "Não"}
-                            </td>
+                            <th scope="col" className="text-right">
+                              Séries avaliadas
+                            </th>
+                            <th scope="col" className="text-right">
+                              Sinais
+                            </th>
+                            <th scope="col" className="text-right">
+                              Confirmados
+                            </th>
+                            <th scope="col" className="text-right">
+                              Por acaso
+                            </th>
+                            <th scope="col" className="text-right">
+                              Referência simples
+                            </th>
+                            <th scope="col" className="text-right">
+                              Usado no Radar
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[34rem] text-sm">
-                      <caption className="mb-2 text-left text-sm font-medium">
-                        Simulação com a forma real da série estadual de roubo
-                        (taxa de sinal por janela de 12 semanas)
-                      </caption>
-                      <thead>
-                        <tr className="border-b border-border text-left text-xs text-muted">
-                          <th scope="col" className="py-2">
-                            Registros/semana
-                          </th>
-                          <th scope="col">Cenário</th>
-                          <th scope="col" className="text-right">
-                            CUSUM
-                          </th>
-                          <th scope="col" className="text-right">
-                            Referência
-                          </th>
-                          <th scope="col" className="text-right">
-                            Atraso médio
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {mud.data.simulacao.map((s) => (
-                          <tr
-                            key={`${s.nivel_semanal}-${s.cenario}`}
-                            className="border-b border-border/60"
-                          >
-                            <td className="py-1.5 tabular-nums">
-                              {fmtNum(s.nivel_semanal, 0)}
-                            </td>
-                            <td>{CENARIOS[s.cenario] ?? s.cenario}</td>
-                            <td className="text-right tabular-nums">
-                              {fmtNum(s.cusum_taxa_sinal * 100)}%
-                            </td>
-                            <td className="text-right tabular-nums">
-                              {fmtNum(s.referencia_taxa_sinal * 100)}%
-                            </td>
-                            <td className="text-right tabular-nums">
-                              {s.cusum_atraso_medio_semanas == null
-                                ? "—"
-                                : `${fmtNum(s.cusum_atraso_medio_semanas)} sem.`}
-                            </td>
+                        </thead>
+                        <tbody>
+                          {mud.data.avaliacao.map((a) => (
+                            <tr
+                              key={a.categoria}
+                              className="border-b border-border/60"
+                            >
+                              <th
+                                scope="row"
+                                className="py-2 text-left font-medium"
+                              >
+                                {NOMES[a.categoria] ?? a.categoria}
+                              </th>
+                              <td className="text-right tabular-nums">
+                                {fmtInt(a.series_avaliadas)}
+                              </td>
+                              <td className="text-right tabular-nums">
+                                {fmtInt(a.sinais)}
+                              </td>
+                              <td className="text-right">
+                                <Pct v={a.confirmados_pct} />
+                              </td>
+                              <td className="text-right">
+                                <Pct v={a.confirmacao_acaso_pct} />
+                              </td>
+                              <td className="text-right tabular-nums">
+                                {a.referencia_confirmados_pct == null
+                                  ? "—"
+                                  : `${fmtNum(a.referencia_confirmados_pct)}% (acaso ${fmtNum(a.referencia_confirmacao_acaso_pct)}%)`}
+                              </td>
+                              <td className="text-right">
+                                {a.confiavel ? "Sim" : "Não"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full min-w-[34rem] text-sm">
+                        <caption className="mb-2 text-left text-sm font-medium">
+                          Simulação com a forma real da série estadual de roubo
+                          (taxa de sinal por janela de 12 semanas)
+                        </caption>
+                        <thead>
+                          <tr className="border-b border-border text-left text-xs text-muted">
+                            <th scope="col" className="py-2">
+                              Registros/semana
+                            </th>
+                            <th scope="col">Cenário</th>
+                            <th scope="col" className="text-right">
+                              CUSUM
+                            </th>
+                            <th scope="col" className="text-right">
+                              Referência
+                            </th>
+                            <th scope="col" className="text-right">
+                              Atraso médio
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {mud.data.simulacao.map((s) => (
+                            <tr
+                              key={`${s.nivel_semanal}-${s.cenario}`}
+                              className="border-b border-border/60"
+                            >
+                              <td className="py-1.5 tabular-nums">
+                                {fmtNum(s.nivel_semanal, 0)}
+                              </td>
+                              <td>{CENARIOS[s.cenario] ?? s.cenario}</td>
+                              <td className="text-right tabular-nums">
+                                {fmtNum(s.cusum_taxa_sinal * 100)}%
+                              </td>
+                              <td className="text-right tabular-nums">
+                                {fmtNum(s.referencia_taxa_sinal * 100)}%
+                              </td>
+                              <td className="text-right tabular-nums">
+                                {s.cusum_atraso_medio_semanas == null
+                                  ? "—"
+                                  : `${fmtNum(s.cusum_atraso_medio_semanas)} sem.`}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <Notice tone="warning" title="Como interpretar">
+                      Em séries pequenas (≈3 registros/semana) o detector quase
+                      nunca encontra mudanças, mesmo reais: ausência de sinal
+                      não é evidência de estabilidade. A referência simples
+                      confirma em proporção parecida; o CUSUM acrescenta
+                      estimativa de início e magnitude e desconta movimentos do
+                      estado inteiro.
+                    </Notice>
                   </div>
-                  <Notice tone="warning" title="Como interpretar">
-                    Em séries pequenas (≈3 registros/semana) o detector quase
-                    nunca encontra mudanças, mesmo reais: ausência de sinal não
-                    é evidência de estabilidade. A referência simples confirma
-                    em proporção parecida; o CUSUM acrescenta estimativa de
-                    início e magnitude e desconta movimentos do estado inteiro.
-                  </Notice>
-                </div>
-              )}
-            </StateMessage>
-          </Card>
-        </section>
+                )}
+              </StateMessage>
+            </Card>
+            {mud.data && (
+              <div className="mt-6">
+                <MethodComparison m={mud.data} />
+              </div>
+            )}
+          </section>
+        )}
 
         {q.data && (
           <Card title="Histórico de execuções do pipeline">

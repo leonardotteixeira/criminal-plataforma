@@ -303,7 +303,7 @@ function CompararInner() {
                               vs. período anterior
                             </th>
                             <th scope="col" className="text-right">
-                              Todos os crimes /100 mil
+                              Tipos exibidos /100 mil
                             </th>
                           </tr>
                         </thead>
@@ -346,6 +346,9 @@ function CompararInner() {
                     </div>
                     <p className="mt-2 text-xs text-muted">
                       — = menos de {meta?.k_min ?? 5} registros (suprimido).
+                      “Tipos exibidos” soma só os tipos de crime com 5 ou mais
+                      registros; os ocultos ficam de fora para não poderem ser
+                      deduzidos por diferença.
                     </p>
                   </Card>
 

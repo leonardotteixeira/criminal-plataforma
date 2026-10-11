@@ -43,14 +43,17 @@ export type Page<T> = {
 
 export type Tendencia = {
   completo_ate: string;
-  serie: { mes: string; n: number }[];
+  /** n nulo = mês suprimido (< k) numa série municipal. */
+  serie: { mes: string; n: number | null }[];
   sazonalidade: { mes: number; indice: number }[];
   variacao_12m_pct: number | null;
   inclinacao_pct_ano: number | null;
   suprimido: boolean;
+  meses_suprimidos: number;
   nota: string;
 };
-export type HourDow = { dow: number; hora: number; n: number };
+/** n nulo = suprimido (< k); 0 = nenhum registro com hora. */
+export type HourDow = { dow: number; hora: number; n: number | null };
 export type Anomalia = {
   nivel: string;
   id: string;
@@ -130,13 +133,100 @@ export type RadarItem = {
   direcao: "alta" | "queda" | null;
   metricas: Record<string, number | null>;
   forca: number;
+  historico: Historico | null;
+};
+export type HistoricoStatus =
+  | "novo"
+  | "persistente"
+  | "historico_insuficiente"
+  | "deixou_de_ser_detectado"
+  | "sem_avaliacao_atual"
+  | "recorrente"
+  | "anterior";
+export type Historico = {
+  status: HistoricoStatus;
+  primeira_deteccao: string;
+  ultima_deteccao: string;
+  deteccoes: number;
+  origens_avaliadas: number;
+  mudou_direcao: boolean;
+  serie: { origem: string; valor: number | null }[];
+  reconstruido: boolean;
 };
 export type Radar = {
   referencia: string;
   criterios: Record<RadarTipo, string>;
   contagem: Record<RadarTipo, number>;
   itens: RadarItem[];
+  deixaram_de_ser_detectados: {
+    categoria: string;
+    categoria_nome: string | null;
+    cd_ibge: number;
+    municipio: string;
+    direcao: "alta" | "queda" | null;
+    ultima_deteccao: string;
+    deteccoes: number;
+  }[];
+  historico_disponivel: boolean;
   aviso: string;
+};
+export type ComparacaoMetodo = {
+  recorte_tipo: "geral" | "categoria" | "faixa" | "ano" | "sensibilidade_h";
+  recorte: string;
+  metodo: string;
+  h: number | null;
+  series: number;
+  sinais: number;
+  taxa_sinal: number | null;
+  conf_t1: number | null;
+  acaso_t1: number | null;
+  lift_t1: number | null;
+  conf_t2: number | null;
+  acaso_t2: number | null;
+  lift_t2: number | null;
+};
+export type Decomposicao = {
+  por: "categoria" | "municipio";
+  regiao: string;
+  categoria: string | null;
+  inicio_anterior: string;
+  fim_anterior: string;
+  inicio: string;
+  fim: string;
+  total_anterior: number;
+  total_atual: number;
+  variacao_total_pct: number | null;
+  itens: {
+    chave: string;
+    nome: string;
+    anterior: number;
+    atual: number;
+    variacao_abs: number;
+    variacao_pct: number | null;
+    contribuicao_pct: number | null;
+  }[];
+  nao_publicados: number;
+  nota: string;
+};
+export type Veredito =
+  | "consistente"
+  | "parcialmente_consistente"
+  | "sensivel_a_janela"
+  | "indistinguivel_do_ruido"
+  | "insuficiente";
+export type Robustez = {
+  regiao: string;
+  categoria: string;
+  veredito: Veredito;
+  resumo: string;
+  verificacoes: {
+    nome: string;
+    descricao: string;
+    variacao_pct: number | null;
+    direcao: "alta" | "queda" | "estavel" | null;
+    detalhe: string;
+  }[];
+  cobertura: string[];
 };
 export type MudancasAvaliacao = {
   categoria: string;
@@ -170,6 +260,28 @@ export type Mudancas = {
     cusum_taxa_sinal: number;
     referencia_taxa_sinal: number;
     cusum_atraso_medio_semanas: number | null;
+  }[];
+  metodo_versao: string | null;
+  comparacao: ComparacaoMetodo[];
+  simulacao_metodos: {
+    sazonalidade_municipal: boolean;
+    nivel_semanal: number;
+    cenario: string;
+    metodo: string;
+    taxa_sinal: number;
+    atraso_medio_semanas: number | null;
+  }[];
+  fdr: {
+    nivel_semanal: number;
+    metodo: string;
+    fdp_media_pct: number;
+    poder_pct: number;
+  }[];
+  estabilidade: {
+    metodo: string;
+    h: number | null;
+    sinais_com_seguinte: number;
+    reaparecem_pct: number;
   }[];
 };
 
@@ -353,6 +465,15 @@ export const analysis = {
   mudancas: (p: { categoria?: string; cd_ibge?: number } = {}) =>
     get<Mudancas>("/v1/mudancas", p),
   qualidade: () => get<Qualidade>("/v1/qualidade"),
+  decomposicao: (p: {
+    por: "categoria" | "municipio";
+    categoria?: string;
+    cd_ibge?: number;
+    meses?: number;
+    top?: number;
+  }) => get<Decomposicao>("/v1/decomposicao", p),
+  robustez: (p: { categoria: string; cd_ibge?: number }) =>
+    get<Robustez>("/v1/robustez", p),
 };
 
 export const forecast = {

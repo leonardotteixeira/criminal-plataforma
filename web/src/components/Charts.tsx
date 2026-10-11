@@ -18,7 +18,8 @@ const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
 const fmt = (n: number) => n.toLocaleString("pt-BR");
 
-export type Serie = { name: string; points: { x: string; y: number }[] };
+/** y nulo = valor suprimido (< k): a linha é interrompida, nunca desenhada como zero. */
+export type Serie = { name: string; points: { x: string; y: number | null }[] };
 
 const SERIES_COLORS = [
   "var(--series-1)",
@@ -63,9 +64,12 @@ export function MultiLineChart({
   const W = width;
   const H = height;
   const pad = { l: 44, r: 8, t: 16, b: 20 };
-  const max = niceMax(
-    Math.max(...series.flatMap((s) => s.points.map((p) => p.y))),
+  const valores = series.flatMap((s) =>
+    s.points.flatMap((p) => (p.y == null ? [] : [p.y])),
   );
+  if (!valores.length) return null;
+  const max = niceMax(Math.max(...valores));
+  const lacunas = series.some((s) => s.points.some((p) => p.y == null));
   const xi = new Map(xs.map((v, i) => [v, i]));
   const x = (v: string) =>
     pad.l + ((xi.get(v) ?? 0) / (xs.length - 1)) * (W - pad.l - pad.r);
@@ -125,12 +129,22 @@ export function MultiLineChart({
         ))}
         {series.map((s, si) => {
           const pts = s.points.filter((p) => xi.has(p.x));
+          // Ponto nulo interrompe o traço (M recomeça no próximo ponto válido).
+          let quebra = true;
           const d = pts
-            .map(
-              (p, i) =>
-                `${i ? "L" : "M"}${x(p.x).toFixed(1)},${y(p.y).toFixed(1)}`,
-            )
+            .map((p) => {
+              if (p.y == null) {
+                quebra = true;
+                return "";
+              }
+              const cmd = quebra ? "M" : "L";
+              quebra = false;
+              return `${cmd}${x(p.x).toFixed(1)},${y(p.y).toFixed(1)}`;
+            })
             .join(" ");
+          const validos = pts.filter(
+            (p): p is { x: string; y: number } => p.y != null,
+          );
           const color = SERIES_COLORS[si % SERIES_COLORS.length];
           return (
             <g key={s.name}>
@@ -141,7 +155,7 @@ export function MultiLineChart({
                 strokeWidth="2"
                 strokeDasharray={SERIES_DASH[si % SERIES_DASH.length]}
               />
-              {pts.map((p) => (
+              {validos.map((p) => (
                 <circle
                   key={p.x}
                   cx={x(p.x)}
@@ -170,6 +184,12 @@ export function MultiLineChart({
           </text>
         ))}
       </svg>
+      {lacunas && (
+        <p className="mt-1 text-xs text-muted">
+          Interrupções na linha = meses com menos de 5 registros, ocultados para
+          proteger a privacidade (não são zero).
+        </p>
+      )}
       {series.length > 1 && (
         <figcaption className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
           {series.map((s, si) => (
@@ -199,7 +219,7 @@ export function LineChart({
   label,
   unit = "ocorrências registradas por mês",
 }: {
-  data: { mes: string; n: number }[];
+  data: { mes: string; n: number | null }[];
   label: string;
   unit?: string;
 }) {
@@ -219,10 +239,10 @@ export function YearOverlay({
   data,
   label,
 }: {
-  data: { mes: string; n: number }[];
+  data: { mes: string; n: number | null }[];
   label: string;
 }) {
-  const byYear = new Map<string, { x: string; y: number }[]>();
+  const byYear = new Map<string, { x: string; y: number | null }[]>();
   for (const d of data) {
     const y = d.mes.slice(0, 4);
     if (!byYear.has(y)) byYear.set(y, []);
@@ -298,67 +318,99 @@ export function SeasonBars({
 export function HourDowGrid({
   data,
 }: {
-  data: { dow: number; hora: number; n: number }[];
+  data: { dow: number; hora: number; n: number | null }[];
 }) {
-  if (!data.length)
+  const valores = data.flatMap((d) => (d.n ? [d.n] : []));
+  if (!valores.length)
     return (
       <p className="text-xs text-muted">Sem dados suficientes de horário.</p>
     );
-  const max = Math.max(...data.map((d) => d.n));
+  const max = Math.max(...valores);
   const cell = new Map(data.map((d) => [`${d.dow}-${d.hora}`, d.n]));
+  const ocultas = data.filter((d) => d.n == null).length;
   const W = 340;
   const lw = 26;
   const cw = (W - lw) / 24;
   const ch = 13;
   return (
-    <svg
-      viewBox={`0 0 ${W} ${7 * ch + 16}`}
-      className="w-full"
-      role="img"
-      aria-label="Ocorrências por dia da semana e hora"
-    >
-      {DIAS.map((dia, r) => (
-        <g key={dia}>
+    <figure>
+      <svg
+        viewBox={`0 0 ${W} ${7 * ch + 16}`}
+        className="w-full"
+        role="img"
+        aria-label="Ocorrências por dia da semana e hora"
+      >
+        <defs>
+          <pattern
+            id="hachura-oculta"
+            width="4"
+            height="4"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <line
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="4"
+              stroke="var(--muted)"
+              strokeWidth="1"
+            />
+          </pattern>
+        </defs>
+        {DIAS.map((dia, r) => (
+          <g key={dia}>
+            <text
+              x={lw - 4}
+              y={r * ch + 10}
+              fontSize="9"
+              textAnchor="end"
+              fill="var(--muted)"
+            >
+              {dia}
+            </text>
+            {Array.from({ length: 24 }, (_, h) => {
+              const n = cell.has(`${r}-${h}`) ? cell.get(`${r}-${h}`)! : 0;
+              const fill =
+                n == null
+                  ? "url(#hachura-oculta)"
+                  : n
+                    ? `rgb(${rampColor(n / max).join(",")})`
+                    : "var(--border)";
+              return (
+                <rect
+                  key={h}
+                  x={lw + h * cw}
+                  y={r * ch}
+                  width={cw - 1}
+                  height={ch - 1}
+                  rx={1.5}
+                  fill={fill}
+                >
+                  <title>{`${dia} ${h}h: ${n == null ? "oculto (menos de 5)" : fmt(n)}`}</title>
+                </rect>
+              );
+            })}
+          </g>
+        ))}
+        {[0, 6, 12, 18].map((h) => (
           <text
-            x={lw - 4}
-            y={r * ch + 10}
+            key={h}
+            x={lw + h * cw}
+            y={7 * ch + 11}
             fontSize="9"
-            textAnchor="end"
             fill="var(--muted)"
           >
-            {dia}
+            {h}h
           </text>
-          {Array.from({ length: 24 }, (_, h) => {
-            const n = cell.get(`${r}-${h}`) ?? 0;
-            return (
-              <rect
-                key={h}
-                x={lw + h * cw}
-                y={r * ch}
-                width={cw - 1}
-                height={ch - 1}
-                rx={1.5}
-                fill={
-                  n ? `rgb(${rampColor(n / max).join(",")})` : "var(--border)"
-                }
-              >
-                <title>{`${dia} ${h}h: ${fmt(n)}`}</title>
-              </rect>
-            );
-          })}
-        </g>
-      ))}
-      {[0, 6, 12, 18].map((h) => (
-        <text
-          key={h}
-          x={lw + h * cw}
-          y={7 * ch + 11}
-          fontSize="9"
-          fill="var(--muted)"
-        >
-          {h}h
-        </text>
-      ))}
-    </svg>
+        ))}
+      </svg>
+      {ocultas > 0 && (
+        <figcaption className="mt-1 text-xs text-muted">
+          Células hachuradas ({ocultas}) têm menos de 5 registros e ficam
+          ocultas; células cinza lisas não têm registro.
+        </figcaption>
+      )}
+    </figure>
   );
 }
