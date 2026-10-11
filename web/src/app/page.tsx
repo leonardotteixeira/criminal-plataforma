@@ -9,7 +9,10 @@ export default function Home() {
       <p className="text-lg text-muted">{brand.tagline}.</p>
       <p>{brand.description}</p>
       <div>
-        <Link href="/dashboard" className="inline-block rounded-md bg-accent px-5 py-2.5 font-medium text-white">
+        <Link
+          href="/dashboard"
+          className="inline-block rounded-md bg-accent px-5 py-2.5 font-medium text-white"
+        >
           Abrir painel
         </Link>
       </div>

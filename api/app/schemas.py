@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 class Meta(BaseModel):
     marca: str
     dados_ate: date = Field(description="Data do fato mais recente presente nos dados.")
+    completo_ate: date = Field(description="Última data com dados considerados completos.")
     k_min: int = Field(description="Células com menos ocorrências que isso nunca são exibidas.")
     categorias: list[str]
     avisos: list[str]

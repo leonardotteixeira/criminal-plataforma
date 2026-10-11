@@ -5,6 +5,8 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
+from .analysis import completo_ate
+from .analysis import router as analysis_router
 from .schemas import (
     Categoria,
     Cell,
@@ -43,6 +45,8 @@ app.add_middleware(
     CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["GET"], allow_headers=["*"]
 )
 
+app.include_router(analysis_router)
+
 
 def _ascii(s: str) -> str:
     return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode().lower()
@@ -72,6 +76,7 @@ def meta() -> Meta:
     return Meta(
         marca="SinalBR",
         dados_ate=_dados_ate(),
+        completo_ate=completo_ate(),
         k_min=K_MIN,
         categorias=list(CATEGORIAS),
         avisos=AVISOS,

@@ -10,7 +10,16 @@ from .settings import CACHE_TTL, LAKE_DIR
 
 _lock = threading.Lock()
 _con: duckdb.DuckDBPyConnection | None = None
-GOLD_TABLES = ["cell_month", "mun_month", "mun_week", "mun_hour_dow", "bairro_month", "cell_week"]
+GOLD_TABLES = [
+    "cell_month",
+    "mun_month",
+    "mun_week",
+    "mun_hour_dow",
+    "bairro_month",
+    "cell_week",
+    "anomalias",
+    "meta",
+]
 
 
 def connection() -> duckdb.DuckDBPyConnection:

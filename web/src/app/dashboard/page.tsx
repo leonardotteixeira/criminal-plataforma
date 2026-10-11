@@ -3,14 +3,24 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { AlertsTab, CompareBox, TimeTab } from "@/components/AnalysisTabs";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { brand, disclaimers } from "@/config/brand";
-import { api, type Categoria, type Heatmap, type Meta, type MunicipioRow } from "@/lib/api";
+import {
+  api,
+  type Categoria,
+  type Heatmap,
+  type Meta,
+  type MunicipioRow,
+} from "@/lib/api";
 
-const HeatMap = dynamic(() => import("@/components/HeatMap").then((m) => m.HeatMap), {
-  ssr: false,
-  loading: () => <div className="h-full w-full animate-pulse bg-border/40" />,
-});
+const HeatMap = dynamic(
+  () => import("@/components/HeatMap").then((m) => m.HeatMap),
+  {
+    ssr: false,
+    loading: () => <div className="h-full w-full animate-pulse bg-border/40" />,
+  },
+);
 
 const PERIODOS = [
   { id: 3, label: "Últimos 3 meses" },
@@ -32,6 +42,8 @@ export default function Dashboard() {
   const [meses, setMeses] = useState(12);
   const [heat, setHeat] = useState<Heatmap | null>(null);
   const [rank, setRank] = useState<MunicipioRow[]>([]);
+  const [tab, setTab] = useState<"geral" | "tempo" | "alertas">("geral");
+  const [sel, setSel] = useState<MunicipioRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const key = meta ? `${categoria}|${meses}` : null;
@@ -48,8 +60,15 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!meta) return;
-    const params = { categoria, inicio: monthsBack(meta.dados_ate, meses), fim: meta.dados_ate };
-    Promise.all([api.heatmap(params), api.municipios({ ...params, page_size: 10 })])
+    const params = {
+      categoria,
+      inicio: monthsBack(meta.dados_ate, meses),
+      fim: meta.dados_ate,
+    };
+    Promise.all([
+      api.heatmap(params),
+      api.municipios({ ...params, page_size: 10 }),
+    ])
       .then(([h, r]) => {
         setHeat(h);
         setRank(r.items);
@@ -107,7 +126,10 @@ export default function Dashboard() {
           </div>
           <HeatMap cells={heat?.cells ?? []} />
           {loading && (
-            <div role="status" className="absolute right-14 top-3 rounded bg-surface px-2 py-1 text-xs shadow">
+            <div
+              role="status"
+              className="absolute right-14 top-3 rounded bg-surface px-2 py-1 text-xs shadow"
+            >
               Carregando…
             </div>
           )}
@@ -115,49 +137,131 @@ export default function Dashboard() {
 
         <aside className="w-full overflow-y-auto border-t border-border bg-surface p-4 lg:w-96 lg:border-l lg:border-t-0">
           {error && (
-            <p role="alert" className="mb-3 rounded border border-red-400 p-2 text-sm text-red-600 dark:text-red-400">
+            <p
+              role="alert"
+              className="mb-3 rounded border border-red-400 p-2 text-sm text-red-600 dark:text-red-400"
+            >
               Não foi possível carregar os dados: {error}
             </p>
           )}
-          <h2 className="text-sm font-semibold">Resumo</h2>
-          <dl className="mt-2 grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <dt className="text-muted">Ocorrências nos hexágonos exibidos</dt>
-              <dd className="text-xl font-semibold tabular-nums">{total.toLocaleString("pt-BR")}</dd>
-            </div>
-            <div>
-              <dt className="text-muted">Hexágonos ocultos (&lt; {meta?.k_min ?? 5})</dt>
-              <dd className="text-xl font-semibold tabular-nums">
-                {(heat?.celulas_suprimidas ?? 0).toLocaleString("pt-BR")}
-              </dd>
-            </div>
-          </dl>
-          {meta && (
-            <p className="mt-2 text-xs text-muted">
-              Dados até {new Date(meta.dados_ate + "T00:00:00").toLocaleDateString("pt-BR")}. Os meses mais
-              recentes estão incompletos.
-            </p>
-          )}
-
-          <h2 className="mt-6 text-sm font-semibold">Municípios com maior taxa por 100 mil hab.</h2>
-          <ol className="mt-2 space-y-1.5 text-sm">
-            {rank.map((m, i) => (
-              <li key={m.cd_ibge} className="flex items-baseline justify-between gap-2">
-                <span>
-                  <span className="mr-2 tabular-nums text-muted">{i + 1}.</span>
-                  {m.municipio}
-                </span>
-                <span className="tabular-nums">{m.taxa_100k?.toLocaleString("pt-BR") ?? "—"}</span>
-              </li>
+          <div
+            role="tablist"
+            aria-label="Análises"
+            className="mb-4 flex gap-1 rounded-md bg-background p-1 text-sm"
+          >
+            {(["geral", "tempo", "alertas"] as const).map((k) => (
+              <button
+                key={k}
+                role="tab"
+                aria-selected={tab === k}
+                className={`flex-1 rounded px-2 py-1 ${tab === k ? "bg-surface font-semibold shadow-sm" : "text-muted"}`}
+                onClick={() => setTab(k)}
+              >
+                {
+                  { geral: "Visão geral", tempo: "Tempo", alertas: "Alertas" }[
+                    k
+                  ]
+                }
+              </button>
             ))}
-          </ol>
-          <p className="mt-2 text-xs text-muted">
-            Taxa = ocorrências registradas no período ÷ população do Censo 2022. Municípios pequenos oscilam
-            muito; compare com cautela.
-          </p>
+          </div>
+          {meta && tab === "tempo" && (
+            <TimeTab
+              categoria={categoria}
+              cdIbge={sel?.cd_ibge ?? null}
+              municipio={sel?.municipio ?? null}
+              completoAte={meta.completo_ate}
+            />
+          )}
+          {meta && tab === "alertas" && (
+            <AlertsTab
+              categoria={categoria}
+              cdIbge={null}
+              municipio={null}
+              completoAte={meta.completo_ate}
+            />
+          )}
+          {tab === "geral" && (
+            <>
+              <h2 className="text-sm font-semibold">Resumo</h2>
+              <dl className="mt-2 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-muted">
+                    Ocorrências nos hexágonos exibidos
+                  </dt>
+                  <dd className="text-xl font-semibold tabular-nums">
+                    {total.toLocaleString("pt-BR")}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-muted">
+                    Hexágonos ocultos (&lt; {meta?.k_min ?? 5})
+                  </dt>
+                  <dd className="text-xl font-semibold tabular-nums">
+                    {(heat?.celulas_suprimidas ?? 0).toLocaleString("pt-BR")}
+                  </dd>
+                </div>
+              </dl>
+              {meta && (
+                <p className="mt-2 text-xs text-muted">
+                  Dados até{" "}
+                  {new Date(meta.dados_ate + "T00:00:00").toLocaleDateString(
+                    "pt-BR",
+                  )}
+                  . Os meses mais recentes estão incompletos.
+                </p>
+              )}
 
-          <section aria-labelledby="limites" className="mt-6 rounded-md border border-border p-3 text-xs text-muted">
-            <h2 id="limites" className="mb-1 text-sm font-semibold text-foreground">
+              <h2 className="mt-6 text-sm font-semibold">
+                Municípios com maior taxa por 100 mil hab.
+              </h2>
+              <ol className="mt-2 space-y-1.5 text-sm">
+                {rank.map((m, i) => (
+                  <li key={m.cd_ibge}>
+                    <button
+                      type="button"
+                      aria-pressed={sel?.cd_ibge === m.cd_ibge}
+                      onClick={() =>
+                        setSel(sel?.cd_ibge === m.cd_ibge ? null : m)
+                      }
+                      className={`flex w-full items-baseline justify-between gap-2 rounded px-1 text-left hover:bg-background ${sel?.cd_ibge === m.cd_ibge ? "bg-background font-semibold" : ""}`}
+                    >
+                      <span>
+                        <span className="mr-2 tabular-nums text-muted">
+                          {i + 1}.
+                        </span>
+                        {m.municipio}
+                      </span>
+                      <span className="tabular-nums">
+                        {m.taxa_100k?.toLocaleString("pt-BR") ?? "—"}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-2 text-xs text-muted">
+                Taxa = ocorrências registradas no período ÷ população do Censo
+                2022. Municípios pequenos oscilam muito; compare com cautela.
+              </p>
+
+              {meta && (
+                <CompareBox
+                  categoria={categoria}
+                  cdIbge={sel?.cd_ibge ?? null}
+                  municipio={null}
+                  completoAte={meta.completo_ate}
+                />
+              )}
+            </>
+          )}
+          <section
+            aria-labelledby="limites"
+            className="mt-6 rounded-md border border-border p-3 text-xs text-muted"
+          >
+            <h2
+              id="limites"
+              className="mb-1 text-sm font-semibold text-foreground"
+            >
               Limitações
             </h2>
             <ul className="list-disc space-y-1 pl-4">

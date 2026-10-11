@@ -4,6 +4,7 @@ export type Categoria = { id: string; nome: string };
 export type Meta = {
   marca: string;
   dados_ate: string;
+  completo_ate: string;
   k_min: number;
   categorias: string[];
   avisos: string[];
@@ -26,9 +27,17 @@ export type MunicipioRow = {
   suprimido: boolean;
   taxa_100k: number | null;
 };
-export type Page<T> = { items: T[]; total: number; page: number; page_size: number };
+export type Page<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+};
 
-async function get<T>(path: string, params: Record<string, string | number | undefined> = {}) {
+async function get<T>(
+  path: string,
+  params: Record<string, string | number | undefined> = {},
+) {
   const url = new URL(path, brand.apiUrl);
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== "") url.searchParams.set(k, String(v));
@@ -43,6 +52,54 @@ export const api = {
   categorias: () => get<Categoria[]>("/v1/categorias"),
   heatmap: (p: { categoria?: string; inicio?: string; fim?: string }) =>
     get<Heatmap>("/v1/heatmap/h3", p),
-  municipios: (p: { categoria?: string; inicio?: string; fim?: string; page_size?: number }) =>
-    get<Page<MunicipioRow>>("/v1/municipios", p),
+  municipios: (p: {
+    categoria?: string;
+    inicio?: string;
+    fim?: string;
+    page_size?: number;
+  }) => get<Page<MunicipioRow>>("/v1/municipios", p),
+};
+
+export type Tendencia = {
+  completo_ate: string;
+  serie: { mes: string; n: number }[];
+  sazonalidade: { mes: number; indice: number }[];
+  variacao_12m_pct: number | null;
+  inclinacao_pct_ano: number | null;
+  suprimido: boolean;
+  nota: string;
+};
+export type HourDow = { dow: number; hora: number; n: number };
+export type Anomalia = {
+  nivel: string;
+  id: string;
+  nome: string | null;
+  categoria: string;
+  semana: string;
+  n: number;
+  esperado: number;
+  z: number;
+  razao: number;
+};
+export type Anomalias = {
+  semana_completa_ate: string;
+  metodo: string;
+  itens: Anomalia[];
+};
+export type ComparacaoPeriodos = {
+  a: number | null;
+  b: number | null;
+  variacao_pct: number | null;
+  suprimido: boolean;
+};
+
+export const analysis = {
+  tendencia: (p: { categoria?: string; cd_ibge?: number }) =>
+    get<Tendencia>("/v1/tendencia", p),
+  horaDia: (p: { categoria?: string; cd_ibge?: number }) =>
+    get<HourDow[]>("/v1/hora-dia", p),
+  anomalias: (p: { categoria?: string; limit?: number }) =>
+    get<Anomalias>("/v1/anomalias", { nivel: "municipio", ...p }),
+  comparar: (p: Record<string, string | number | undefined>) =>
+    get<ComparacaoPeriodos>("/v1/comparacao/periodos", p),
 };

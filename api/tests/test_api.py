@@ -49,6 +49,25 @@ def client(tmp_path_factory, monkeypatch_module):
         t(cd_ibge,municipio,populacao_2022)""",
         "ref/municipios_sp.parquet",
     )
+    out(
+        """SELECT 3550308 AS cd_ibge, 'São Paulo' AS municipio, 'furto' AS categoria,
+                  m::DATE AS mes, (100 + 2 * row_number() OVER (ORDER BY m))::INTEGER AS n
+           FROM generate_series(DATE '2024-01-01', DATE '2026-06-01', INTERVAL 1 MONTH) g(m)""",
+        "gold/mun_month_furto.parquet",
+    )
+    con.execute(
+        f"""COPY (SELECT * FROM '{(lake / "gold/mun_month.parquet").as_posix()}'
+                  UNION ALL SELECT * FROM '{(lake / "gold/mun_month_furto.parquet").as_posix()}')
+            TO '{(lake / "gold/mun_month2.parquet").as_posix()}' (FORMAT parquet)"""
+    )
+    (lake / "gold/mun_month.parquet").unlink()
+    (lake / "gold/mun_month2.parquet").rename(lake / "gold/mun_month.parquet")
+    out("SELECT DATE '2026-06-15' AS semana_completa_ate", "gold/meta.parquet")
+    out(
+        """SELECT 'municipio' nivel, '3550308' id, 'furto' categoria, DATE '2026-06-08' semana,
+                  50 n, 20.0 esperado, 6.5 z, 2.5 razao""",
+        "gold/anomalias.parquet",
+    )
     monkeypatch_module.setenv("SINALBR_LAKE", str(lake))
     from app import main  # importa depois de apontar o lake
 
@@ -70,6 +89,7 @@ def test_meta_has_disclaimers_and_k_min(client):
     assert r["k_min"] == 5
     assert any("subnotificação" in a for a in r["avisos"])
     assert r["dados_ate"] == "2026-06-28"
+    assert r["completo_ate"] == "2026-06-21"
 
 
 def test_heatmap_suppresses_small_cells(client):
@@ -102,3 +122,45 @@ def test_municipios_search_ignores_accents(client):
 def test_series_marks_last_month_partial(client):
     r = client.get("/v1/series", params={"categoria": "roubo"}).json()
     assert r[-1]["parcial"] is True and r[0]["parcial"] is False
+
+
+def test_tendencia_excludes_incomplete_month_and_detects_growth(client):
+    r = client.get("/v1/tendencia", params={"categoria": "furto"}).json()
+    assert r["suprimido"] is False
+    assert r["serie"][-1]["mes"] == "2026-05-01"  # junho ainda incompleto
+    assert r["inclinacao_pct_ano"] > 0
+    assert r["variacao_12m_pct"] > 0
+    assert len(r["sazonalidade"]) == 12
+
+
+def test_tendencia_suppresses_tiny_series(client):
+    r = client.get("/v1/tendencia", params={"categoria": "roubo", "cd_ibge": 3509502}).json()
+    assert r["suprimido"] is True and r["serie"] == []
+
+
+def test_comparacao_periodos(client):
+    q = {"categoria": "furto", "inicio_a": "2025-01-01", "fim_a": "2025-12-31",
+         "inicio_b": "2026-01-01", "fim_b": "2026-06-30"}  # fmt: skip
+    r = client.get("/v1/comparacao/periodos", params=q).json()
+    assert r["a"] > 0 and r["b"] > 0 and r["suprimido"] is False
+    bad = client.get("/v1/comparacao/periodos", params={**q, "inicio_a": "2026-01-01"})
+    assert bad.status_code == 422
+
+
+def test_comparacao_periodos_suppresses_small_counts(client):
+    q = {"categoria": "roubo", "cd_ibge": 3509502, "inicio_a": "2026-06-01",
+         "fim_a": "2026-06-30", "inicio_b": "2026-06-01", "fim_b": "2026-06-30"}  # fmt: skip
+    assert client.get("/v1/comparacao/periodos", params=q).json()["suprimido"] is True
+
+
+def test_comparacao_regioes_returns_rate(client):
+    r = client.get("/v1/comparacao/regioes", params=[("cd_ibge", 3550308), ("categoria", "furto")])
+    item = r.json()[0]
+    assert item["taxa_100k"] > 0 and item["serie_taxa_100k"]
+    assert client.get("/v1/comparacao/regioes", params={"cd_ibge": 1}).status_code == 404
+
+
+def test_anomalias_lists_with_names_and_method(client):
+    r = client.get("/v1/anomalias", params={"desde": "2026-06-01"}).json()
+    assert r["itens"][0]["nome"] == "São Paulo"
+    assert "Poisson" in r["metodo"]
