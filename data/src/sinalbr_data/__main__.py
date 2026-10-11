@@ -1,10 +1,10 @@
-"""CLI: python -m sinalbr_data [bronze|silver|gold|analytics|changes|forecast|quality|all]"""
+"""CLI: python -m sinalbr_data [bronze|silver|gold|analytics|changes|history|forecast|quality|all]"""
 
 import sys
 
 import duckdb
 
-from . import analytics, bronze, changes, forecast, gold, ibge, quality, silver
+from . import analytics, bronze, changes, forecast, gold, history, ibge, quality, silver
 from . import config as C
 
 
@@ -24,8 +24,11 @@ def main(step: str = "all") -> None:
     if step in ("changes", "all"):
         res = changes.run(con)
         print("changes:", res["sinais"], "sinais")
-        for r in res["avaliacao"]:
-            print(r)
+        for r in res.get("comparacao", []):
+            if r["recorte_tipo"] == "geral":
+                print(r)
+    if step in ("history", "changes", "all"):
+        print("historico do radar:", history.build(con))
     if step in ("forecast", "all"):
         res = forecast.run(con)
         print("forecast:", res["origem"], res["celulas"], "celulas")

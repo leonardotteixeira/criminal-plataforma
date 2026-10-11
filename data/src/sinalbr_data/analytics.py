@@ -20,7 +20,7 @@ Z_MIN = 3.0
 MIN_N = 10
 MIN_RATIO = 1.3
 BASELINE_WEEKS = 12
-LOOKBACK_WEEKS = 26
+LOOKBACK_WEEKS = 56  # cobre a janela do histórico do radar (52 semanas)
 H3_ANOM_RES = 7  # ~5 km²: células res. 8 são esparsas demais para séries semanais estáveis
 
 
