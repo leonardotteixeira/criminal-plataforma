@@ -53,7 +53,12 @@ def test_mudancas_reports_evaluation_and_simulation(client):
     r = client.get("/v1/mudancas").json()
     by = {a["categoria"]: a for a in r["avaliacao"]}
     assert by["furto"]["confiavel"] is True and by["roubo"]["confiavel"] is False
-    assert {i["categoria"]: i["confiavel"] for i in r["itens"]} == {"furto": True, "roubo": False}
+    # /v1/mudancas lista todos os sinais (inclusive os que não passam no BH), com a flag fdr_ok
+    assert {i["categoria"]: i["confiavel"] for i in r["itens"]} == {
+        "furto": True,
+        "roubo": False,
+        "drogas": False,
+    }
     assert r["simulacao"][0]["cenario"] == "alta_30"
 
 

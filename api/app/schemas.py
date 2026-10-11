@@ -70,11 +70,12 @@ class Page(BaseModel, Generic[T]):  # noqa: UP046
 
 class SeriesPoint(BaseModel):
     periodo: date
-    n: int
+    n: int | None = Field(description="Nulo quando suprimido (< k_min) numa série municipal.")
+    suprimido: bool = False
     parcial: bool = Field(description="Mês ainda incompleto (atraso de registro).")
 
 
 class HourDowCell(BaseModel):
     dow: int = Field(description="0 = domingo ... 6 = sábado")
     hora: int
-    n: int
+    n: int | None = Field(description="Nulo = suprimido (< k_min); 0 = nenhum registro com hora.")

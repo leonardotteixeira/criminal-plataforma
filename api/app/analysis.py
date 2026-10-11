@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from . import db
+from .protecao import agregado, publicar
 from .settings import K_MIN
 
 router = APIRouter(prefix="/v1", tags=["analises"])
@@ -14,7 +15,7 @@ router = APIRouter(prefix="/v1", tags=["analises"])
 
 class MesPonto(BaseModel):
     mes: date
-    n: int
+    n: int | None = Field(description="Nulo quando suprimido (< k_min) numa série municipal.")
 
 
 class Sazonalidade(BaseModel):
@@ -33,6 +34,7 @@ class Tendencia(BaseModel):
         description="Inclinação linear dos últimos 24 meses completos, em % da média por ano."
     )
     suprimido: bool
+    meses_suprimidos: int = Field(0, description="Pontos mensais ocultos (< k_min).")
     nota: str
 
 
@@ -117,54 +119,72 @@ def _slope_pct_per_year(ys: list[int]) -> float | None:
 
 @router.get("/tendencia", response_model=Tendencia)
 def tendencia(categoria: str | None = None, cd_ibge: int | None = None) -> Tendencia:
-    where, params = _where(categoria, cd_ibge)
-    rows = db.query(
-        f"SELECT mes, sum(n)::INTEGER AS n FROM mun_month WHERE {where} GROUP BY 1 ORDER BY 1",
-        params,
-    )
+    where, params = "TRUE", []
+    if cd_ibge is not None:
+        where, params = "cd_ibge = ?", [cd_ibge]
+    sql, params = agregado("mun_month", ["mes"], where, params, categoria)
+    rows = db.query(f"SELECT mes, n::INTEGER AS n FROM ({sql}) ORDER BY 1", params)
     ate = completo_ate()
     rows = _meses_completos(rows, ate)
     nota = (
         "Tendência por regressão linear simples; sazonalidade = média do índice mensal nos "
         "anos completos. Sem controle de feriados ou mudanças de registro."
     )
+    vazio = Tendencia(
+        completo_ate=ate, serie=[], sazonalidade=[], variacao_12m_pct=None,
+        inclinacao_pct_ano=None, suprimido=True, nota=nota,
+    )  # fmt: skip
     if not rows or sum(r["n"] for r in rows) < K_MIN * 12:
-        return Tendencia(
-            completo_ate=ate, serie=[], sazonalidade=[], variacao_12m_pct=None,
-            inclinacao_pct_ano=None, suprimido=True, nota=nota,
-        )  # fmt: skip
+        return vazio
+    # Série municipal: pontos < k viram nulo. Estatísticas derivadas (variação, inclinação,
+    # sazonalidade) só usam janelas SEM pontos suprimidos; do contrário, combinadas com os pontos
+    # publicados, permitiriam recalcular o valor oculto.
+    pub = [r["n"] if cd_ibge is None else publicar(r["n"]) for r in rows]
+    n_sup = sum(v is None for v in pub)
     ys = [r["n"] for r in rows]
+
+    def limpo(janela: list) -> bool:
+        return all(v is not None for v in janela)
+
     var12 = None
-    if len(ys) >= 24 and sum(ys[-24:-12]) > 0:
+    if len(ys) >= 24 and limpo(pub[-24:]) and sum(ys[-24:-12]) > 0:
         var12 = round((sum(ys[-12:]) / sum(ys[-24:-12]) - 1) * 100, 1)
-    by_year: dict[int, dict[int, int]] = {}
-    for r in rows:
-        by_year.setdefault(r["mes"].year, {})[r["mes"].month] = r["n"]
+    inclinacao = _slope_pct_per_year(ys[-24:]) if limpo(pub[-24:]) else None
+    by_year: dict[int, dict[int, int | None]] = {}
+    for r, v in zip(rows, pub, strict=True):
+        by_year.setdefault(r["mes"].year, {})[r["mes"].month] = v
     idx: dict[int, list[float]] = {m: [] for m in range(1, 13)}
     for months in by_year.values():
-        if len(months) == 12:
+        if len(months) == 12 and all(v is not None for v in months.values()):
             avg = sum(months.values()) / 12
             for m, v in months.items():
                 idx[m].append(v / avg)
     saz = [Sazonalidade(mes=m, indice=round(sum(v) / len(v), 3)) for m, v in idx.items() if v]
+    if n_sup:
+        nota += (
+            f" {n_sup} mês(es) com menos de {K_MIN} registros ficam ocultos; indicadores que "
+            "dependeriam deles não são calculados."
+        )
     return Tendencia(
         completo_ate=ate,
-        serie=[MesPonto(**r) for r in rows],
+        serie=[MesPonto(mes=r["mes"], n=v) for r, v in zip(rows, pub, strict=True)],
         sazonalidade=saz,
         variacao_12m_pct=var12,
-        inclinacao_pct_ano=_slope_pct_per_year(ys[-24:]),
+        inclinacao_pct_ano=inclinacao,
         suprimido=False,
+        meses_suprimidos=n_sup,
         nota=nota,
     )
 
 
 def _periodo_sum(categoria, cd_ibge, ini: date, fim: date) -> int:
-    where, params = _where(categoria, cd_ibge)
-    r = db.query(
-        f"SELECT coalesce(sum(n), 0)::INTEGER AS n FROM mun_month "
-        f"WHERE {where} AND mes >= ? AND mes <= ?",
-        [*params, ini.replace(day=1), fim],
-    )
+    """Soma no período, com agregação consistente entre categorias quando não há filtro."""
+    where, params = "mes >= ? AND mes <= ?", [ini.replace(day=1), fim]
+    if cd_ibge is not None:
+        where += " AND cd_ibge = ?"
+        params.append(cd_ibge)
+    sql, params = agregado("mun_month", ["1"], where, params, categoria)
+    r = db.query(f"SELECT coalesce(sum(n), 0)::INTEGER AS n FROM ({sql})", params)
     return r[0]["n"]
 
 
@@ -332,7 +352,9 @@ class PerfilMunicipio(BaseModel):
     cd_ibge: int
     municipio: str
     populacao_2022: int | None
-    total: int | None
+    total: int | None = Field(
+        description="Soma das categorias publicadas (>= k); categorias suprimidas não entram."
+    )
     taxa_total_100k: float | None
     categorias: list[PerfilCategoria]
 
@@ -406,7 +428,9 @@ def perfil(
     for c in cd_ibge:
         m = muns[c]
         pop = m["populacao_2022"]
-        tot = sum(sum(v) for (mc, _), v in atual.items() if mc == c)
+        # Agregação consistente: o total é a soma das categorias publicadas (>= k). Somar também
+        # as suprimidas permitiria recuperá-las por diferença (supressão complementar).
+        tot = sum(sum(v) for (mc, _), v in atual.items() if mc == c and sum(v) >= K_MIN)
         lista = []
         for cat in cats:
             n = sum(atual.get((c, cat), []))

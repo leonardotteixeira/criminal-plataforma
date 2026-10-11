@@ -33,6 +33,11 @@ OPTIONAL_TABLES = {
     "qualidade_semana": "quality",
     "qualidade_etapas": "quality",
     "execucoes": "quality",
+    "radar_historico": "history",
+    "mudancas_comparacao": "changes",
+    "mudancas_simulacao": "changes",
+    "mudancas_fdr": "changes",
+    "mudancas_estabilidade": "changes",
 }
 GOLD_TABLES = CORE_TABLES + list(OPTIONAL_TABLES)
 

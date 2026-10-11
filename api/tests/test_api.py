@@ -14,10 +14,11 @@ def test_meta_has_disclaimers_and_k_min(client):
 
 
 def test_heatmap_suppresses_small_cells(client):
-    r = client.get("/v1/heatmap/h3", params={"categoria": "roubo", "inicio": "2026-05-01"}).json()
+    # janela ancorada de 3 meses (abr-jun/2026) terminando na data dos dados
+    r = client.get("/v1/heatmap/h3", params={"categoria": "roubo", "inicio": "2026-04-01"}).json()
     # célula 1 soma 12 (>=5, publicada arredondada para 10); célula 2 tem 2 (<5) e é suprimida
     assert [c["n"] for c in r["cells"]] == [10]
-    assert r["celulas_suprimidas"] == 1 and r["arredondamento"] == 5
+    assert r["celulas_suprimidas"] == 2 and r["arredondamento"] == 5
 
 
 def test_heatmap_rejects_unknown_category(client):
@@ -117,6 +118,6 @@ def test_export_municipios_csv_has_bom_metadata_and_suppression(client):
 
 
 def test_export_celulas_csv_only_includes_cells_above_k(client):
-    r = client.get("/v1/export/celulas.csv", params={"categoria": "roubo", "inicio": "2026-05-01"})
+    r = client.get("/v1/export/celulas.csv", params={"categoria": "roubo", "inicio": "2026-04-01"})
     rows = [ln for ln in r.text.splitlines() if ln and not ln.lstrip("﻿").startswith("#")]
     assert rows[0] == "h3_res8,ocorrencias" and rows[1:] == ["88a8100c07fffff,10"]

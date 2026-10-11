@@ -20,7 +20,8 @@ def client(tmp_path_factory, monkeypatch_module):
           ('88a8100c07fffff','roubo',DATE '2026-05-01',9),
           ('88a8100c07fffff','roubo',DATE '2026-06-01',3),
           ('88a8100c09fffff','roubo',DATE '2026-06-01',2),
-          ('88a8100c0bfffff','furto',DATE '2026-06-01',20)) t(h3,categoria,mes,n)""",
+          ('88a8100c0bfffff','furto',DATE '2026-06-01',20),
+          ('88a8100c0bfffff','roubo',DATE '2026-06-01',3)) t(h3,categoria,mes,n)""",
         "gold/cell_month.parquet",
     )
     out(
@@ -73,7 +74,12 @@ def client(tmp_path_factory, monkeypatch_module):
                   CASE WHEN cd_ibge = 3550308 THEN 300
                        WHEN m < DATE '2025-06-01' THEN 400 ELSE 100 END AS n
            FROM (VALUES (3550308, 'São Paulo'), (3509502, 'Campinas')) v(cd_ibge, municipio)
-           CROSS JOIN generate_series(DATE '2024-06-01', DATE '2026-05-01', INTERVAL 1 MONTH) g(m)""",
+           CROSS JOIN generate_series(DATE '2024-06-01', DATE '2026-05-01', INTERVAL 1 MONTH) g(m)
+           UNION ALL
+           -- armas em Campinas: 6/mês, exceto dez/2025 com 2 (ponto que deve ser suprimido)
+           SELECT 3509502, 'Campinas', 'armas', m::DATE,
+                  CASE WHEN m = DATE '2025-12-01' THEN 2 ELSE 6 END
+           FROM generate_series(DATE '2024-06-01', DATE '2026-05-01', INTERVAL 1 MONTH) g(m)""",
         "gold/mun_month_drogas.parquet",
     )
     con.execute(
@@ -85,10 +91,14 @@ def client(tmp_path_factory, monkeypatch_module):
     (lake / "gold/mun_month3.parquet").rename(lake / "gold/mun_month.parquet")
     out(
         """SELECT * FROM (VALUES
-          (3550308, 'furto', 'alta', DATE '2026-04-06', 10, 1.5, 300.0, 200.0, 9.0),
-          (3550308, 'roubo', 'queda', DATE '2026-04-06', 10, 0.6, 60.0, 100.0, 7.0)
-        ) t(cd_ibge, categoria, direcao, inicio, semanas, razao, observado, esperado, cusum_max)
-        CROSS JOIN (SELECT DATE '2026-06-15' AS semana_referencia)""",
+          (3550308, 'furto', 'alta', DATE '2026-04-06', 10, 1.5, 300.0, 200.0, 9.0, 0.0001, true),
+          (3550308, 'roubo', 'queda', DATE '2026-04-06', 10, 0.6, 60.0, 100.0, 7.0, 0.001, true),
+          -- sinal que NÃO sobrevive ao BH: não pode aparecer no radar
+          (3550308, 'drogas', 'alta', DATE '2026-04-06', 10, 1.4, 40.0, 28.0, 5.5, 0.04, false)
+        ) t(cd_ibge, categoria, direcao, inicio, semanas, razao, observado, esperado, cusum_max,
+            p_valor, fdr_ok)
+        CROSS JOIN (SELECT DATE '2026-06-15' AS semana_referencia,
+                           'share+bh-K0.5-H5.0' AS metodo)""",
         "gold/mudancas.parquet",
     )
     out(
@@ -158,6 +168,18 @@ def client(tmp_path_factory, monkeypatch_module):
         "SELECT 'roubo' categoria, i AS decil, i * 1.0 previsto, i * 1.1 observado "
         "FROM range(1, 11) t(i)",
         "gold/backtest_calibracao.parquet",
+    )
+    out(
+        """SELECT * FROM (VALUES
+          ('mudanca_persistente|furto|3550308|alta', 'mudanca_persistente', 'furto', 3550308, 'alta',
+           DATE '2026-05-18', DATE '2026-06-15', 2, true, true, 3, false, 'persistente'),
+          ('mudanca_persistente|roubo|3509502|queda', 'mudanca_persistente', 'roubo', 3509502, 'queda',
+           DATE '2026-04-20', DATE '2026-05-18', 2, false, true, 3, false, 'deixou_de_ser_detectado')
+        ) t(obs_id, tipo, categoria, cd_ibge, direcao, primeira_deteccao, ultima_deteccao, deteccoes,
+            detectado_atual, detectado_anterior, origens_avaliadas, mudou_direcao, status)
+        CROSS JOIN (SELECT [{'origem': DATE '2026-05-18', 'valor': 1.4},
+                            {'origem': DATE '2026-06-15', 'valor': 1.5}] AS serie)""",
+        "gold/radar_historico.parquet",
     )
     monkeypatch_module.setenv("SINALBR_LAKE", str(lake))
     from app import main  # importa depois de apontar o lake

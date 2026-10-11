@@ -49,8 +49,10 @@ CRITERIOS = {
     "mudanca_persistente": (
         "CUSUM bilateral (K=0,5, H=5) sobre resíduos do modelo de participação no total "
         "estadual; ≥ 4 semanas desde o início, magnitude ≥ 20% e últimas 4 semanas na mesma "
-        f"direção. Só para categorias com ≥ {MUD_MIN_SINAIS} sinais históricos avaliados e "
-        f"confirmação fora da amostra ≥ {MUD_LIFT_MIN}× a taxa do acaso."
+        "direção; sobrevive ao controle de falsas descobertas de Benjamini-Hochberg (q = 0,10) "
+        "entre as séries da mesma atualização (p-valor aproximado: o BH não garante a taxa real "
+        f"de falsas descobertas). Só para categorias com ≥ {MUD_MIN_SINAIS} sinais históricos "
+        f"avaliados e confirmação fora da amostra ≥ {MUD_LIFT_MIN}× a taxa do acaso."
     ),
     "variacao": (
         f"12 meses completos vs. 12 anteriores, com ≥ {VAR_BASE_MIN} registros no período "
@@ -68,6 +70,27 @@ CRITERIOS = {
 }
 
 
+class PontoHistorico(BaseModel):
+    origem: date
+    valor: float | None
+
+
+class Historico(BaseModel):
+    status: str = Field(
+        description="novo | persistente | historico_insuficiente | deixou_de_ser_detectado | "
+        "sem_avaliacao_atual | recorrente | anterior"
+    )
+    primeira_deteccao: date
+    ultima_deteccao: date
+    deteccoes: int = Field(description="Origens (a cada 4 semanas) em que o sinal apareceu.")
+    origens_avaliadas: int = Field(description="Origens em que a série pôde ser avaliada.")
+    mudou_direcao: bool
+    serie: list[PontoHistorico]
+    reconstruido: bool = Field(
+        description="Origens passadas recalculadas com os dados atuais (não o que foi visto na época)."
+    )
+
+
 class RadarItem(BaseModel):
     tipo: str = Field(description="mudanca_persistente | variacao | anomalia | dados")
     categoria: str | None
@@ -81,6 +104,17 @@ class RadarItem(BaseModel):
     direcao: str | None = Field(None, description="alta | queda (sem juízo de valor)")
     metricas: dict[str, float | int | None]
     forca: float = Field(description="Usada só para ordenar itens do mesmo tipo.")
+    historico: Historico | None = None
+
+
+class Encerrado(BaseModel):
+    categoria: str
+    categoria_nome: str | None
+    cd_ibge: int
+    municipio: str
+    direcao: str | None
+    ultima_deteccao: date
+    deteccoes: int
 
 
 class RadarResponse(BaseModel):
@@ -88,6 +122,11 @@ class RadarResponse(BaseModel):
     criterios: dict[str, str]
     contagem: dict[str, int]
     itens: list[RadarItem]
+    deixaram_de_ser_detectados: list[Encerrado] = Field(
+        default_factory=list,
+        description="Mudanças detectadas na origem anterior e não na atual (série ainda avaliável).",
+    )
+    historico_disponivel: bool = False
     aviso: str
 
 
@@ -102,6 +141,49 @@ class Mudanca(BaseModel):
     observado: int
     esperado: float
     confiavel: bool = Field(description="A avaliação retrospectiva da categoria sustenta o sinal.")
+    p_valor: float | None = None
+    fdr_ok: bool | None = Field(None, description="Sobrevive ao Benjamini-Hochberg (q = 0,10).")
+
+
+class ComparacaoMetodo(BaseModel):
+    """Avaliação comparativa (gold/mudancas_comparacao): mesmo conjunto de séries por método."""
+
+    recorte_tipo: str
+    recorte: str
+    metodo: str
+    h: float | None
+    series: float
+    sinais: float
+    taxa_sinal: float | None
+    conf_t1: float | None
+    acaso_t1: float | None
+    lift_t1: float | None
+    conf_t2: float | None
+    acaso_t2: float | None
+    lift_t2: float | None
+
+
+class SimulacaoMetodo(BaseModel):
+    sazonalidade_municipal: bool
+    nivel_semanal: float
+    cenario: str
+    metodo: str
+    taxa_sinal: float
+    atraso_medio_semanas: float | None
+
+
+class FdrLote(BaseModel):
+    nivel_semanal: float
+    metodo: str
+    fdp_media_pct: float
+    poder_pct: float
+
+
+class Estabilidade(BaseModel):
+    metodo: str
+    h: float | None
+    sinais_com_seguinte: float
+    reaparecem_pct: float
 
 
 class AvaliacaoCategoria(BaseModel):
@@ -129,10 +211,53 @@ class MudancasResponse(BaseModel):
     itens: list[Mudanca]
     avaliacao: list[AvaliacaoCategoria]
     simulacao: list[Simulacao]
+    metodo_versao: str | None = None
+    comparacao: list[ComparacaoMetodo] = Field(default_factory=list)
+    simulacao_metodos: list[SimulacaoMetodo] = Field(default_factory=list)
+    fdr: list[FdrLote] = Field(default_factory=list)
+    estabilidade: list[Estabilidade] = Field(default_factory=list)
+
+
+def _qtd(n: float | int | None) -> str:
+    """Contagem para texto: nunca escreve um valor abaixo de k."""
+    return f"menos de {K_MIN}" if n is None or n < K_MIN else str(int(n))
 
 
 def _fmt(d: date) -> str:
     return d.strftime("%d/%m/%Y")
+
+
+def _historico_map(categoria, cd_ibge) -> dict[str, Historico]:
+    if not db.has("radar_historico"):
+        return {}
+    w, p = _filtros(categoria, cd_ibge)
+    out = {}
+    for r in db.query(f"SELECT * FROM radar_historico WHERE TRUE {w}", p):
+        out[r["obs_id"]] = Historico(
+            status=r["status"],
+            primeira_deteccao=r["primeira_deteccao"],
+            ultima_deteccao=r["ultima_deteccao"],
+            deteccoes=r["deteccoes"],
+            origens_avaliadas=r["origens_avaliadas"],
+            mudou_direcao=r["mudou_direcao"],
+            serie=[PontoHistorico(**s) for s in r["serie"]],
+            reconstruido=True,
+        )
+    return out
+
+
+def _encerrados(categoria, cd_ibge, limite: int) -> list[Encerrado]:
+    if not db.has("radar_historico"):
+        return []
+    w, p = _filtros(categoria, cd_ibge, "h.")
+    rows = db.query(
+        f"""SELECT h.categoria, h.cd_ibge, m.municipio, h.direcao, h.ultima_deteccao, h.deteccoes
+            FROM radar_historico h JOIN municipios m USING (cd_ibge)
+            WHERE h.status = 'deixou_de_ser_detectado' AND h.tipo = 'mudanca_persistente' {w}
+            ORDER BY h.deteccoes DESC, m.municipio LIMIT ?""",
+        [*p, limite],
+    )
+    return [Encerrado(**r, categoria_nome=NOMES.get(r["categoria"])) for r in rows]
 
 
 @db.ttl_cache
@@ -176,7 +301,7 @@ def _mudancas(categoria, cd_ibge, ref: date) -> list[RadarItem]:
     w, p = _filtros(categoria, cd_ibge, "d.")
     rows = db.query(
         f"""SELECT d.*, m.municipio FROM mudancas d JOIN municipios m USING (cd_ibge)
-            WHERE TRUE {w} ORDER BY d.cusum_max DESC""",
+            WHERE coalesce(d.fdr_ok, true) {w} ORDER BY d.cusum_max DESC""",
         p,
     )
     itens = []
@@ -203,7 +328,7 @@ def _mudancas(categoria, cd_ibge, ref: date) -> list[RadarItem]:
                     f"padrão estadual {desde} {_fmt(r['inicio'])}"
                 ),
                 explicacao=(
-                    f"Nas {r['semanas']} semanas {desde} {_fmt(r['inicio'])}, {int(r['observado'])} "
+                    f"Nas {r['semanas']} semanas {desde} {_fmt(r['inicio'])}, {_qtd(r['observado'])} "
                     f"registros contra ~{r['esperado']:.0f} esperados se o município seguisse o "
                     f"estado ({pct:+.0f}%). Historicamente, {a['cusum_confirmados_pct']:.0f}% "
                     f"dos sinais desta categoria se mantiveram nas 8 semanas seguintes (por acaso: "
@@ -408,11 +533,19 @@ def radar(
         "dados": _dados(categoria),
     }
     itens = [i for g in grupos.values() for i in g[:por_tipo]]
+    hist = _historico_map(categoria, cd_ibge)
+    for i in itens:
+        if i.tipo == "mudanca_persistente":
+            i.historico = hist.get(f"mudanca_persistente|{i.categoria}|{i.cd_ibge}|{i.direcao}")
+        elif i.tipo == "anomalia":
+            i.historico = hist.get(f"anomalia|{i.categoria}|{i.cd_ibge}")
     return RadarResponse(
         referencia=ate,
         criterios=CRITERIOS,
         contagem={k: len(v) for k, v in grupos.items()},
         itens=itens,
+        deixaram_de_ser_detectados=_encerrados(categoria, cd_ibge, por_tipo),
+        historico_disponivel=bool(hist) or db.has("radar_historico"),
         aviso=(
             "Observações estatísticas sobre registros policiais, não sobre crime real. Nenhum "
             "item indica causa; todos pedem investigação com outras fontes."
@@ -430,7 +563,7 @@ def mudancas(
     w, p = _filtros(categoria, cd_ibge, "d.")
     rows = db.query(
         f"""SELECT d.cd_ibge, m.municipio, d.categoria, d.direcao, d.inicio, d.semanas,
-                   d.razao, d.observado::INTEGER AS observado, d.esperado
+                   d.razao, d.observado::INTEGER AS observado, d.esperado, d.p_valor, d.fdr_ok
             FROM mudancas d JOIN municipios m USING (cd_ibge) WHERE TRUE {w}
             ORDER BY d.cusum_max DESC""",
         p,
@@ -443,7 +576,26 @@ def mudancas(
         "FROM mudancas_avaliacao WHERE tipo = 'simulacao' "
         "ORDER BY nivel_semanal, cenario"
     )
+
+    def tabela(nome: str, sql: str) -> list[dict]:
+        return db.query(sql) if db.has(nome) else []
+
+    versao = db.query("SELECT any_value(metodo) AS m FROM mudancas")[0]["m"]
     return MudancasResponse(
+        metodo_versao=versao,
+        comparacao=[
+            ComparacaoMetodo(**r)
+            for r in tabela("mudancas_comparacao", "SELECT * FROM mudancas_comparacao")
+        ],
+        simulacao_metodos=[
+            SimulacaoMetodo(**r)
+            for r in tabela("mudancas_simulacao", "SELECT * FROM mudancas_simulacao")
+        ],
+        fdr=[FdrLote(**r) for r in tabela("mudancas_fdr", "SELECT * FROM mudancas_fdr")],
+        estabilidade=[
+            Estabilidade(**r)
+            for r in tabela("mudancas_estabilidade", "SELECT * FROM mudancas_estabilidade")
+        ],
         referencia=completo_ate(),
         metodo=CRITERIOS["mudanca_persistente"],
         itens=[
