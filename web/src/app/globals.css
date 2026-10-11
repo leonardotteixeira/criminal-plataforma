@@ -10,6 +10,18 @@
   --muted: #5b6573;
   --border: #dfe3e8;
   --accent: #0b6e6e;
+  /* Semânticas de estado da interface (não de "bom/ruim" para crime: aumento de registros
+     nunca usa verde; variações usam texto + seta em cor neutra). */
+  --danger: #b42318;
+  --warning: #93370d;
+  --warning-bg: #fffaeb;
+  --info: #175cd3;
+  --surface-2: #f1f3f6;
+  /* Paleta categórica (Okabe-Ito), segura para daltonismo; séries também variam no traço. */
+  --series-1: #0072b2;
+  --series-2: #d55e00;
+  --series-3: #009e73;
+  --series-4: #cc79a7;
 }
 
 .dark {
@@ -19,15 +31,29 @@
   --muted: #9aa5b4;
   --border: #29313d;
   --accent: #4fc3b8;
+  --danger: #f97066;
+  --warning: #fdb022;
+  --warning-bg: #2b2111;
+  --info: #84adff;
+  --surface-2: #1b222c;
+  --series-1: #56b4e9;
+  --series-2: #e69f00;
+  --series-3: #3fc79a;
+  --series-4: #e08fbf;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
   --color-muted: var(--muted);
   --color-border: var(--border);
   --color-accent: var(--accent);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-info: var(--info);
   --font-sans: var(--font-geist-sans);
 }
 

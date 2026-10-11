@@ -18,73 +18,225 @@ const DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
 
 const fmt = (n: number) => n.toLocaleString("pt-BR");
 
+export type Serie = { name: string; points: { x: string; y: number }[] };
+
+const SERIES_COLORS = [
+  "var(--series-1)",
+  "var(--series-2)",
+  "var(--series-3)",
+  "var(--series-4)",
+];
+// O traço também muda por série: a cor não é o único meio de distinguir.
+const SERIES_DASH = ["", "6 3", "2 3", "9 3 2 3"];
+
+function niceMax(v: number) {
+  if (v <= 0) return 1;
+  const p = 10 ** Math.floor(Math.log10(v));
+  const f = v / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+}
+
+/**
+ * Linhas no tempo (eixo x mensal). Eixo y com unidade e gradeado; cada ponto mostra o valor
+ * ao passar o mouse; legenda com amostra de cor e traço quando há mais de uma série.
+ */
+export function MultiLineChart({
+  series,
+  label,
+  unit,
+  height = 140,
+  width = 360,
+  xLabel = "year",
+}: {
+  series: Serie[];
+  label: string;
+  unit: string;
+  height?: number;
+  /** Largura lógica do SVG: use ~720 em áreas largas para manter o texto legível. */
+  width?: number;
+  xLabel?: "year" | "month";
+}) {
+  const xs = [
+    ...new Set(series.flatMap((s) => s.points.map((p) => p.x))),
+  ].sort();
+  if (xs.length < 2) return null;
+  const W = width;
+  const H = height;
+  const pad = { l: 44, r: 8, t: 16, b: 20 };
+  const max = niceMax(
+    Math.max(...series.flatMap((s) => s.points.map((p) => p.y))),
+  );
+  const xi = new Map(xs.map((v, i) => [v, i]));
+  const x = (v: string) =>
+    pad.l + ((xi.get(v) ?? 0) / (xs.length - 1)) * (W - pad.l - pad.r);
+  const y = (v: number) => pad.t + (1 - v / max) * (H - pad.t - pad.b);
+  const ticks = [0, max / 2, max];
+  // Séries curtas (≤ 24 meses) marcam meses a cada trimestre; longas marcam só os anos.
+  const xticks =
+    xLabel === "month"
+      ? xs.map((v) => ({ v, t: MESES[Number(v.slice(5, 7)) - 1] }))
+      : xs.length <= 24
+        ? xs
+            .filter((_, i) => i % 3 === 0)
+            .map((v) => ({
+              v,
+              t: `${MESES[Number(v.slice(5, 7)) - 1]}/${v.slice(2, 4)}`,
+            }))
+        : xs
+            .filter((v) => v.slice(5, 7) === "01")
+            .map((v) => ({ v, t: v.slice(0, 4) }));
+  const fmtV = (v: number) =>
+    v.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+  const fmtX = (v: string) =>
+    xLabel === "year"
+      ? `${MESES[Number(v.slice(5, 7)) - 1]}/${v.slice(0, 4)}`
+      : MESES[Number(v.slice(5, 7)) - 1];
+  return (
+    <figure>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full"
+        role="img"
+        aria-label={label}
+      >
+        <text x={pad.l} y={9} fontSize="9" fill="var(--muted)">
+          {unit}
+        </text>
+        {ticks.map((tk) => (
+          <g key={tk}>
+            <line
+              x1={pad.l}
+              x2={W - pad.r}
+              y1={y(tk)}
+              y2={y(tk)}
+              stroke="var(--border)"
+              strokeDasharray={tk ? "2 3" : ""}
+            />
+            <text
+              x={pad.l - 4}
+              y={y(tk) + 3}
+              textAnchor="end"
+              fontSize="9"
+              fill="var(--muted)"
+            >
+              {fmtV(tk)}
+            </text>
+          </g>
+        ))}
+        {series.map((s, si) => {
+          const pts = s.points.filter((p) => xi.has(p.x));
+          const d = pts
+            .map(
+              (p, i) =>
+                `${i ? "L" : "M"}${x(p.x).toFixed(1)},${y(p.y).toFixed(1)}`,
+            )
+            .join(" ");
+          const color = SERIES_COLORS[si % SERIES_COLORS.length];
+          return (
+            <g key={s.name}>
+              <path
+                d={d}
+                fill="none"
+                stroke={color}
+                strokeWidth="2"
+                strokeDasharray={SERIES_DASH[si % SERIES_DASH.length]}
+              />
+              {pts.map((p) => (
+                <circle
+                  key={p.x}
+                  cx={x(p.x)}
+                  cy={y(p.y)}
+                  r={2.6}
+                  fill={color}
+                  opacity={0.001}
+                  className="hover:opacity-100"
+                >
+                  <title>{`${s.name} · ${fmtX(p.x)}: ${fmtV(p.y)} ${unit}`}</title>
+                </circle>
+              ))}
+            </g>
+          );
+        })}
+        {xticks.map(({ v, t }) => (
+          <text
+            key={v}
+            x={x(v)}
+            y={H - 5}
+            fontSize="9"
+            textAnchor="middle"
+            fill="var(--muted)"
+          >
+            {t}
+          </text>
+        ))}
+      </svg>
+      {series.length > 1 && (
+        <figcaption className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+          {series.map((s, si) => (
+            <span key={s.name} className="inline-flex items-center gap-1.5">
+              <svg width="22" height="8" aria-hidden="true">
+                <line
+                  x1="0"
+                  x2="22"
+                  y1="4"
+                  y2="4"
+                  stroke={SERIES_COLORS[si % SERIES_COLORS.length]}
+                  strokeWidth="2"
+                  strokeDasharray={SERIES_DASH[si % SERIES_DASH.length]}
+                />
+              </svg>
+              {s.name}
+            </span>
+          ))}
+        </figcaption>
+      )}
+    </figure>
+  );
+}
+
 export function LineChart({
+  data,
+  label,
+  unit = "ocorrências registradas por mês",
+}: {
+  data: { mes: string; n: number }[];
+  label: string;
+  unit?: string;
+}) {
+  return (
+    <MultiLineChart
+      label={label}
+      unit={unit}
+      series={[
+        { name: "Registros", points: data.map((d) => ({ x: d.mes, y: d.n })) },
+      ]}
+    />
+  );
+}
+
+/** Comparação entre anos: uma linha por ano completo ou parcial, eixo jan–dez. */
+export function YearOverlay({
   data,
   label,
 }: {
   data: { mes: string; n: number }[];
   label: string;
 }) {
-  if (data.length < 2) return null;
-  const W = 340;
-  const H = 120;
-  const pad = { l: 38, r: 6, t: 8, b: 18 };
-  const max = Math.max(...data.map((d) => d.n));
-  const x = (i: number) =>
-    pad.l + (i / (data.length - 1)) * (W - pad.l - pad.r);
-  const y = (v: number) => pad.t + (1 - v / max) * (H - pad.t - pad.b);
-  const path = data
-    .map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(d.n).toFixed(1)}`)
-    .join(" ");
-  const years = data
-    .map((d, i) => ({ d, i }))
-    .filter(({ d }) => d.mes.endsWith("-01-01"));
+  const byYear = new Map<string, { x: string; y: number }[]>();
+  for (const d of data) {
+    const y = d.mes.slice(0, 4);
+    if (!byYear.has(y)) byYear.set(y, []);
+    // Todos os anos no mesmo eixo: usamos um ano fixo para posicionar o mês.
+    byYear.get(y)!.push({ x: `2000-${d.mes.slice(5, 7)}-01`, y: d.n });
+  }
+  const years = [...byYear.keys()].sort().slice(-4);
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className="w-full"
-      role="img"
-      aria-label={label}
-    >
-      <line
-        x1={pad.l}
-        x2={W - pad.r}
-        y1={y(0)}
-        y2={y(0)}
-        stroke="var(--border)"
-      />
-      <text
-        x={pad.l - 4}
-        y={pad.t + 4}
-        textAnchor="end"
-        fontSize="9"
-        fill="var(--muted)"
-      >
-        {fmt(max)}
-      </text>
-      <text
-        x={pad.l - 4}
-        y={y(0)}
-        textAnchor="end"
-        fontSize="9"
-        fill="var(--muted)"
-      >
-        0
-      </text>
-      <path d={path} fill="none" stroke="var(--accent)" strokeWidth="2" />
-      {years.map(({ d, i }) => (
-        <text
-          key={d.mes}
-          x={x(i)}
-          y={H - 4}
-          fontSize="9"
-          textAnchor="middle"
-          fill="var(--muted)"
-        >
-          {d.mes.slice(0, 4)}
-        </text>
-      ))}
-    </svg>
+    <MultiLineChart
+      label={label}
+      unit="registros por mês"
+      xLabel="month"
+      series={years.map((y) => ({ name: y, points: byYear.get(y)! }))}
+    />
   );
 }
 

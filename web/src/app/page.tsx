@@ -35,12 +35,23 @@ const SOLUCOES = [
     d: "Tendência, sazonalidade e horário/dia da semana, sempre sobre períodos completos para não confundir atraso de registro com queda.",
   },
   {
-    t: "Alertas de anomalia",
-    d: "Aumentos incomuns por município e região, com método simples e explicado. Picos de eventos de massa são sinalizados como tal.",
+    t: "Radar territorial",
+    d: "O que mudou e merece investigação: mudanças persistentes descontado o movimento do estado, variações fora do padrão e picos semanais, cada um com o critério que o fez aparecer.",
+    href: "/radar",
+  },
+  {
+    t: "Comparação entre municípios",
+    d: "Até quatro municípios lado a lado, em taxas por 100 mil habitantes, com intervalo de incerteza e exportação em CSV.",
+    href: "/comparar",
   },
   {
     t: "Previsão com prestação de contas",
-    d: "Risco esperado para as próximas 4 semanas, comparado a baselines simples em backtest sem vazamento. Mostramos inclusive onde o modelo não ganha.",
+    d: "Registros esperados nas próximas 4 semanas, comparados a baselines simples em backtest sem vazamento. Mostramos inclusive onde o modelo não ganha.",
+  },
+  {
+    t: "Qualidade dos dados à vista",
+    d: "Cobertura por ano e tipo de crime, semanas incompletas e histórico de processamento, para saber quanto confiar em cada análise.",
+    href: "/qualidade",
   },
 ];
 
@@ -220,6 +231,14 @@ export default function Home() {
                 </span>
                 <h3 className="mt-1 font-semibold">{s.t}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-muted">{s.d}</p>
+                {"href" in s && s.href && (
+                  <Link
+                    href={s.href}
+                    className="mt-3 inline-block text-sm font-medium text-accent hover:underline"
+                  >
+                    Abrir →
+                  </Link>
+                )}
               </article>
             ))}
           </div>
