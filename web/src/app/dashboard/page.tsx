@@ -3,11 +3,19 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { AlertsTab, CompareBox, TimeTab } from "@/components/AnalysisTabs";
+import {
+  AlertsTab,
+  CATS_PREVISAO,
+  CompareBox,
+  ForecastTab,
+  TimeTab,
+} from "@/components/AnalysisTabs";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { brand, disclaimers } from "@/config/brand";
 import {
   api,
+  forecast,
+  type Previsao,
   type Categoria,
   type Heatmap,
   type Meta,
@@ -42,9 +50,14 @@ export default function Dashboard() {
   const [meses, setMeses] = useState(12);
   const [heat, setHeat] = useState<Heatmap | null>(null);
   const [rank, setRank] = useState<MunicipioRow[]>([]);
-  const [tab, setTab] = useState<"geral" | "tempo" | "alertas">("geral");
+  const [tab, setTab] = useState<"geral" | "tempo" | "alertas" | "previsao">(
+    "geral",
+  );
   const [sel, setSel] = useState<MunicipioRow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [prev, setPrev] = useState<{ cat: string; data: Previsao } | null>(
+    null,
+  );
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const key = meta ? `${categoria}|${meses}` : null;
   const loading = key !== null && key !== loadedKey;
@@ -57,6 +70,19 @@ export default function Dashboard() {
       })
       .catch((e) => setError(String(e.message ?? e)));
   }, []);
+
+  useEffect(() => {
+    if (
+      tab !== "previsao" ||
+      !CATS_PREVISAO.includes(categoria) ||
+      prev?.cat === categoria
+    )
+      return;
+    forecast
+      .previsao(categoria)
+      .then((data) => setPrev({ cat: categoria, data }))
+      .catch((e) => setError(String(e.message ?? e)));
+  }, [tab, categoria, prev]);
 
   useEffect(() => {
     if (!meta) return;
@@ -81,6 +107,7 @@ export default function Dashboard() {
       });
   }, [meta, categoria, meses]);
 
+  const showForecast = tab === "previsao" && prev?.cat === categoria;
   const total = heat?.cells.reduce((s, c) => s + c.n, 0) ?? 0;
 
   return (
@@ -124,7 +151,18 @@ export default function Dashboard() {
               </select>
             </label>
           </div>
-          <HeatMap cells={heat?.cells ?? []} />
+          <HeatMap
+            mode={showForecast ? "previsao" : "contagem"}
+            cells={
+              showForecast
+                ? prev!.data.celulas.map((c) => ({
+                    h3: c.h3,
+                    n: Math.round(c.esperado_4s),
+                    faixa: c.faixa,
+                  }))
+                : (heat?.cells ?? [])
+            }
+          />
           {loading && (
             <div
               role="status"
@@ -149,7 +187,7 @@ export default function Dashboard() {
             aria-label="Análises"
             className="mb-4 flex gap-1 rounded-md bg-background p-1 text-sm"
           >
-            {(["geral", "tempo", "alertas"] as const).map((k) => (
+            {(["geral", "tempo", "alertas", "previsao"] as const).map((k) => (
               <button
                 key={k}
                 role="tab"
@@ -158,9 +196,12 @@ export default function Dashboard() {
                 onClick={() => setTab(k)}
               >
                 {
-                  { geral: "Visão geral", tempo: "Tempo", alertas: "Alertas" }[
-                    k
-                  ]
+                  {
+                    geral: "Visão geral",
+                    tempo: "Tempo",
+                    alertas: "Alertas",
+                    previsao: "Previsão",
+                  }[k]
                 }
               </button>
             ))}
@@ -171,6 +212,12 @@ export default function Dashboard() {
               cdIbge={sel?.cd_ibge ?? null}
               municipio={sel?.municipio ?? null}
               completoAte={meta.completo_ate}
+            />
+          )}
+          {tab === "previsao" && (
+            <ForecastTab
+              categoria={categoria}
+              previsao={prev?.cat === categoria ? prev.data : null}
             />
           )}
           {meta && tab === "alertas" && (

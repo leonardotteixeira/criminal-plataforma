@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import db
 from .analysis import completo_ate
 from .analysis import router as analysis_router
+from .previsao import router as previsao_router
 from .schemas import (
     Categoria,
     Cell,
@@ -46,6 +47,7 @@ app.add_middleware(
 )
 
 app.include_router(analysis_router)
+app.include_router(previsao_router)
 
 
 def _ascii(s: str) -> str:

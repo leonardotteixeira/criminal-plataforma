@@ -2,7 +2,7 @@
 
 Plataforma de inteligência criminal construída **somente com dados abertos, agregados e anonimizados** (SSP-SP + IBGE). Nome provisório; a marca é centralizada em `web/src/config/brand.ts`.
 
-> **Status: Fases 1 e 2 concluídas** (pipeline, API, mapa de calor, análises temporais, comparações e anomalias com dados reais). Métodos em [`docs/analises.md`](docs/analises.md). Veja [`docs/plano.md`](docs/plano.md) para as próximas fases.
+> **Status: Fases 1 a 3 concluídas** (pipeline, API, mapa de calor, análises, anomalias e previsão de risco com backtest, tudo com dados reais). Métodos em [`docs/analises.md`](docs/analises.md) e [`docs/previsao.md`](docs/previsao.md). Veja [`docs/plano.md`](docs/plano.md) para as próximas fases.
 
 ## Limitações — leia antes de usar
 
@@ -59,4 +59,4 @@ Testes: `cd data && uv run pytest`, `cd api && uv run pytest`.
 
 ## Ainda não implementado
 
-Previsão de risco, landing completa, exportação PDF/CSV, Docker Compose, CI e pre-commit (Fases 2–5).
+Landing completa, exportação PDF/CSV, Docker Compose, CI e pre-commit (Fases 4–5).

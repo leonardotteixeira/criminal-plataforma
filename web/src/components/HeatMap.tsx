@@ -22,12 +22,23 @@ export function scaleMax(cells: Cell[]): number {
   return Math.max(sorted[Math.floor(sorted.length * 0.98)] ?? 1, 2);
 }
 
-export function HeatMap({ cells }: { cells: Cell[] }) {
+export type MapCell = Cell & { faixa?: string };
+
+const FAIXA_T: Record<string, number> = { alta: 0.95, media: 0.5, baixa: 0.12 };
+
+export function HeatMap({
+  cells,
+  mode = "contagem",
+}: {
+  cells: MapCell[];
+  mode?: "contagem" | "previsao";
+}) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
   const dark = useDark();
   const max = useMemo(() => scaleMax(cells), [cells]);
+  const forecast = mode === "previsao";
 
   useEffect(() => {
     if (!container.current) return;
@@ -60,29 +71,37 @@ export function HeatMap({ cells }: { cells: Cell[] }) {
   useEffect(() => {
     overlayRef.current?.setProps({
       layers: [
-        new H3HexagonLayer<Cell>({
+        new H3HexagonLayer<MapCell>({
           id: "h3",
           data: cells,
           getHexagon: (d) => d.h3,
           getFillColor: (d) => [
-            ...rampColor(Math.log1p(d.n) / Math.log1p(max)),
-            190,
+            ...rampColor(
+              forecast
+                ? (FAIXA_T[d.faixa ?? "baixa"] ?? 0.1)
+                : Math.log1p(d.n) / Math.log1p(max),
+            ),
+            forecast ? 170 : 190,
           ],
           extruded: false,
           stroked: false,
           pickable: true,
           highPrecision: false,
-          updateTriggers: { getFillColor: [max] },
+          updateTriggers: { getFillColor: [max, forecast] },
         }),
       ],
-      getTooltip: ({ object }: { object?: Cell }) =>
+      getTooltip: ({ object }: { object?: MapCell }) =>
         object
           ? {
-              text: `${object.n.toLocaleString("pt-BR")} ocorrências\n(hexágono de ~0,7 km²)`,
+              text: forecast
+                ? `~${object.n.toLocaleString("pt-BR")} registros esperados em 4 semanas
+faixa de risco: ${object.faixa} (célula ~5 km²)`
+                : `${object.n.toLocaleString("pt-BR")} ocorrências
+(hexágono de ~0,7 km²)`,
             }
           : null,
     });
-  }, [cells, max]);
+  }, [cells, max, forecast]);
 
   return (
     <div className="relative h-full w-full">
@@ -92,7 +111,7 @@ export function HeatMap({ cells }: { cells: Cell[] }) {
         role="img"
         aria-label="Mapa de calor de ocorrências por hexágono"
       />
-      <Legend max={max} />
+      {forecast ? <ForecastLegend /> : <Legend max={max} />}
     </div>
   );
 }
@@ -112,6 +131,28 @@ function Legend({ max }: { max: number }) {
         <span>poucas</span>
         <span>≥ {max.toLocaleString("pt-BR")}</span>
       </div>
+    </div>
+  );
+}
+
+function ForecastLegend() {
+  const items = [
+    ["alta", "Alta (top 10%)"],
+    ["media", "Média (10–30%)"],
+    ["baixa", "Baixa"],
+  ] as const;
+  return (
+    <div className="pointer-events-none absolute bottom-6 left-3 rounded-md border border-border bg-surface/90 p-2 text-xs shadow">
+      <div className="mb-1 text-muted">Faixa de risco previsto (4 semanas)</div>
+      {items.map(([k, label]) => (
+        <div key={k} className="flex items-center gap-2">
+          <span
+            className="inline-block h-3 w-3 rounded-sm"
+            style={{ background: `rgb(${rampColor(FAIXA_T[k]).join(",")})` }}
+          />
+          {label}
+        </div>
+      ))}
     </div>
   );
 }

@@ -68,6 +68,28 @@ def client(tmp_path_factory, monkeypatch_module):
                   50 n, 20.0 esperado, 6.5 z, 2.5 razao""",
         "gold/anomalias.parquet",
     )
+    out(
+        """SELECT * FROM (VALUES
+          ('87a8100c0ffffff','roubo',12.5,0.02,'alta'),
+          ('87a8100c1ffffff','roubo',3.1,0.5,'baixa')) t(h3,categoria,esperado_4s,percentil,faixa)
+          CROSS JOIN (SELECT DATE '2026-06-15' origem, DATE '2026-06-22' inicio_previsao,
+                             DATE '2026-07-19' fim_previsao)""",
+        "gold/previsao.parquet",
+    )
+    out(
+        """SELECT * FROM (VALUES
+          ('roubo','media12',2.0,4.0,0.38,0.0,100,10),
+          ('roubo','glm_viz',1.7,3.8,0.39,60.0,100,10),
+          ('roubo','oraculo',0.0,0.0,0.40,100.0,100,10)
+        ) t(categoria,modelo,desvio_poisson,mae,captura_top10,origens_melhor_que_media12_pct,
+            n_obs,n_origens)""",
+        "gold/backtest.parquet",
+    )
+    out(
+        "SELECT 'roubo' categoria, i AS decil, i * 1.0 previsto, i * 1.1 observado "
+        "FROM range(1, 11) t(i)",
+        "gold/backtest_calibracao.parquet",
+    )
     monkeypatch_module.setenv("SINALBR_LAKE", str(lake))
     from app import main  # importa depois de apontar o lake
 
@@ -164,3 +186,19 @@ def test_anomalias_lists_with_names_and_method(client):
     r = client.get("/v1/anomalias", params={"desde": "2026-06-01"}).json()
     assert r["itens"][0]["nome"] == "São Paulo"
     assert "Poisson" in r["metodo"]
+
+
+def test_previsao_returns_ranked_cells_with_disclaimer(client):
+    r = client.get("/v1/previsao/h3", params={"categoria": "roubo"}).json()
+    assert [c["faixa"] for c in r["celulas"]] == ["alta", "baixa"]
+    assert "viés" in r["aviso"] and r["inicio_previsao"] == "2026-06-22"
+    assert client.get("/v1/previsao/h3", params={"categoria": "xyz"}).status_code == 422
+
+
+def test_backtest_reports_gain_and_ceiling_honestly(client):
+    r = client.get("/v1/previsao/backtest", params={"categoria": "roubo"}).json()
+    assert r["reducao_desvio_vs_media12_pct"] == 15.0
+    assert r["ganho_captura_vs_media12_pp"] == 1.0
+    assert r["captura_teto_oraculo"] == 0.4
+    assert all(m["modelo"] != "oraculo" for m in r["modelos"])
+    assert len(r["calibracao"]) == 10 and "persistentes" in r["leitura"]

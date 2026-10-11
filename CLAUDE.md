@@ -14,7 +14,7 @@ Plataforma de inteligência criminal com dados abertos e agregados (SSP-SP + IBG
 - `docs/` plano, privacidade, qualidade dos dados.
 
 ## Comandos
-- Pipeline: `cd data && uv run python -m sinalbr_data [bronze|silver|gold|quality|all]`
+- Pipeline: `cd data && uv run python -m sinalbr_data [bronze|silver|gold|analytics|forecast|quality|all]`
 - API: `cd api && uv run uvicorn app.main:app --port 8000`; testes `uv run pytest`
 - Web: `cd web && npm run dev`; `npx tsc --noEmit && npx eslint src`
 - Lint Python: `uv run ruff check . && uv run ruff format .`

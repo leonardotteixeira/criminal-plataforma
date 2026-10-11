@@ -103,3 +103,43 @@ export const analysis = {
   comparar: (p: Record<string, string | number | undefined>) =>
     get<ComparacaoPeriodos>("/v1/comparacao/periodos", p),
 };
+
+export type PrevisaoCell = {
+  h3: string;
+  esperado_4s: number;
+  faixa: "alta" | "media" | "baixa";
+};
+export type Previsao = {
+  categoria: string;
+  origem: string;
+  inicio_previsao: string;
+  fim_previsao: string;
+  celulas: PrevisaoCell[];
+  aviso: string;
+};
+export type ModeloMetrica = {
+  modelo: string;
+  desvio_poisson: number;
+  mae: number;
+  captura_top10: number;
+  origens_melhor_que_media12_pct: number;
+  n_obs: number;
+  n_origens: number;
+};
+export type Backtest = {
+  categoria: string;
+  metodo: string;
+  modelos: ModeloMetrica[];
+  calibracao: { decil: number; previsto: number; observado: number }[];
+  reducao_desvio_vs_media12_pct: number;
+  ganho_captura_vs_media12_pp: number;
+  captura_teto_oraculo: number;
+  leitura: string;
+};
+
+export const forecast = {
+  previsao: (categoria: string) =>
+    get<Previsao>("/v1/previsao/h3", { categoria }),
+  backtest: (categoria: string) =>
+    get<Backtest>("/v1/previsao/backtest", { categoria }),
+};

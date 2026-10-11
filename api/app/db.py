@@ -19,6 +19,9 @@ GOLD_TABLES = [
     "cell_week",
     "anomalias",
     "meta",
+    "previsao",
+    "backtest",
+    "backtest_calibracao",
 ]
 
 

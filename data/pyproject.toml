@@ -5,6 +5,7 @@ requires-python = ">=3.11"
 dependencies = [
     "duckdb>=1.5.6",
     "httpx>=0.28.1",
+    "numpy>=2.4.6",
     "python-calamine>=0.8.3",
 ]
 
@@ -27,3 +28,4 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]  # linhas longas com SQL embutido; o formatador cuida do resto
