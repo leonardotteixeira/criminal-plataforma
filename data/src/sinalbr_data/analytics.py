@@ -8,6 +8,10 @@ Limitações: não modela sazonalidade anual nem feriados; os meses recentes sof
 registro, então só semanas "completas" são avaliadas (ver `semana_completa_ate`).
 """
 
+import json
+from datetime import datetime
+from email.utils import parsedate_to_datetime
+
 import duckdb
 
 from . import config as C
@@ -63,6 +67,21 @@ def _anomaly_sql(nivel: str, id_expr: str, source: str, min_total: int) -> str:
     """
 
 
+def _versao_dados() -> tuple[str | None, str]:
+    """(Last-Modified mais recente entre os arquivos da SSP, momento do processamento)."""
+    fonte = None
+    manifest = C.RAW / "manifest.json"
+    if manifest.exists():
+        datas = [
+            parsedate_to_datetime(m["last_modified"])
+            for m in json.loads(manifest.read_text(encoding="utf-8")).values()
+            if m.get("last_modified")
+        ]
+        if datas:
+            fonte = max(datas).date().isoformat()
+    return fonte, datetime.now().isoformat(timespec="seconds")
+
+
 def build_anomalies(con: duckdb.DuckDBPyConnection) -> dict:
     con.execute("INSTALL h3 FROM community; LOAD h3;")
     g = C.GOLD.as_posix()
@@ -81,8 +100,12 @@ def build_anomalies(con: duckdb.DuckDBPyConnection) -> dict:
           SELECT semana, n, list_aggregate(list(n) OVER (ORDER BY semana
                  ROWS BETWEEN 8 PRECEDING AND 1 PRECEDING), 'median') AS b FROM t
         )
-        SELECT max(semana) AS max_ok, (SELECT min(semana) FROM t) AS min_w
-        FROM s WHERE n >= 0.85 * b"""
+        SELECT max(semana) FILTER (WHERE n >= 0.85 * b) AS max_ok,
+               (SELECT min(semana) FROM t) AS min_w,
+               -- Última semana com volume não residual (>= 10% da mediana): ignora registros
+               -- soltos com data de fato posterior ao corte do arquivo.
+               max(semana) FILTER (WHERE n >= 0.10 * b) AS ultima_valida
+        FROM s"""
     )
     con.execute(
         """CREATE OR REPLACE TEMP TABLE weeks AS
@@ -97,8 +120,12 @@ def build_anomalies(con: duckdb.DuckDBPyConnection) -> dict:
     )
     out = (C.GOLD / "anomalias.parquet").as_posix()
     con.execute(f"COPY ({sql}) TO '{out}' (FORMAT parquet)")
+    fonte, processado = _versao_dados()
     con.execute(
-        f"""COPY (SELECT max_ok AS semana_completa_ate FROM wk)
+        f"""COPY (SELECT max_ok AS semana_completa_ate, ultima_valida + 6 AS dados_ate,
+                         {f"'{fonte}'" if fonte else "NULL"}::VARCHAR AS fonte_atualizada_em,
+                         '{processado}'::VARCHAR AS processado_em
+                  FROM wk)
         TO '{(C.GOLD / "meta.parquet").as_posix()}' (FORMAT parquet)"""
     )
     stats = con.execute(
