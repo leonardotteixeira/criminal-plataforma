@@ -98,3 +98,108 @@ O Radar aplica regras determinísticas, sem modelo de linguagem. Cada item traz 
 | `dados` | Semanas recentes incompletas e cobertura do mapa < 60% para o tipo filtrado. |
 
 Uma lista vazia mostra um texto explicando o que a ausência **não** significa.
+
+---
+
+## Avaliação v3 (2026-10-11): sazonalidade municipal, múltiplas comparações e histórico
+
+Reproduzir: `cd data && uv run python -m sinalbr_data changes` (sementes fixas). Resultados em `gold/mudancas_comparacao.parquet`, `mudancas_simulacao.parquet`, `mudancas_fdr.parquet`, `mudancas_estabilidade.parquet`; visíveis em `/qualidade#mudancas`.
+
+### Motivação
+
+A participação do município no total estadual tem sazonalidade própria. Considerando as séries com ≥ 40 registros/mês, a razão pico/média mensal vale 1,13 na mediana, 1,30 no p90 e 2,9 no p99. Exemplos: Barretos/furto 2,8× em agosto (Festa do Peão); Campos do Jordão/furto 1,9× em julho. O modelo v1 assume a sazonalidade do estado.
+
+### Alternativa avaliada: modelo sazonal
+
+`μ_t = p · S_t · f_t`, onde `f_t` é a razão entre a participação do município na janela de 5 semanas do ano anterior e a participação na linha de base equivalente do ano anterior. O fator é encolhido para 1 conforme o volume: `w = n/(n+λ)`, com λ = 20.
+
+### Desenho da comparação (equivalente entre métodos)
+
+- **Mesmo conjunto de séries e origens para todos os métodos.** Origens a cada 4 semanas desde que existam 1 ano + 38 semanas de histórico e 8 semanas futuras: 24.571 avaliações (série × origem) em 2023–2026.
+- **Duas verdades fora da amostra** (8 semanas seguintes):
+  - **T1:** o patamar continuou ≥ 1,1× (ou ≤ 0,9×) o esperado pelo padrão estadual;
+  - **T2:** idem, descontando também a sazonalidade do ano anterior. T2 usa o mesmo estimador do modelo sazonal e, por isso, o favorece por construção.
+- **Ganho** = confirmação ÷ confirmação por acaso. O acaso é a fração de **todas** as séries com razão futura na mesma faixa, ponderada pelas direções dos sinais.
+
+### Resultados principais (H = 5)
+
+| Método | Sinais | Confirma T1 | Ganho T1 | Confirma T2 | Ganho T2 |
+|---|---:|---:|---:|---:|---:|
+| Referência simples | 2.201 | 68,7% | 2,28× | 62,0% | 1,89× |
+| Participação (v1) | 1.935 | 68,3% | 2,33× | 63,6% | 2,00× |
+| **Participação + BH (adotado)** | 1.766 | 69,2% | **2,37×** | 64,0% | 2,02× |
+| Sazonal | 3.138 | 57,2% | 1,89× | 70,1% | 2,14× |
+
+Ganho T1 por tipo (entre parênteses, número de sinais):
+
+| Tipo | Referência | Participação | Participação + BH | Sazonal |
+|---|---|---|---|---|
+| Roubo | 2,12× (266) | 2,23× (244) | 2,23× (239) | 1,77× (468) |
+| Furto | 2,32× (858) | 2,31× (810) | 2,31× (797) | 1,92× (1.295) |
+| Lesão corporal | 2,17× (378) | 2,38× (248) | 2,50× (159) | 1,85× (425) |
+| Drogas | 2,16× (466) | 2,17× (404) | 2,16× (389) | 1,82× (528) |
+| Trânsito | 2,22× (224) | 2,38× (220) | 2,50× (173) | 1,89× (394) |
+| Sexual / homicídio / armas | poucos sinais (≤ 20): sem conclusão | | | |
+
+**Outros recortes:**
+- **Faixa de volume:** a participação vence a sazonal nas três faixas (3–10, 10–30, ≥ 30 registros/semana).
+- **Ano:** a participação + BH tem ganho ≥ a participação em 2023, 2024, 2025 e 2026.
+- **Sensibilidade a λ:** com λ = 100 o sazonal sobe para 2,13× (T1) e, com λ = 400, para 2,28×. Ou seja, converge para o modelo de participação e nunca o supera.
+- **Sensibilidade a H** (participação): H = 4, 5 e 6 dão 2.888, 1.935 e 1.336 sinais, com ganho 2,22×, 2,33× e 2,42×. Mantivemos H = 5, definido antes da avaliação, para não ajustar o método aos mesmos dados usados para avaliá-lo.
+
+**Simulação** (forma real da série estadual; 300 réplicas; falso alarme sem mudança real):
+
+| Registros/semana | Sazonalidade municipal | Referência | Participação | Sazonal |
+|---:|---|---:|---:|---:|
+| 10 | não | 6,7% | 3,7% | 8,7% |
+| 10 | sim | 7,3% | 5,3% | 4,3% |
+| 30 | não | 2,7% | 3,7% | 7,3% |
+| 30 | sim | 9,7% | 7,0% | 4,7% |
+
+O modelo sazonal ajuda quando a sazonalidade municipal existe. Quando ela não existe, o fator estimado com um único ano adiciona ruído. Nos dados reais o efeito líquido é negativo.
+
+**Decisão:** manter o modelo de participação; o sazonal fica só no código de avaliação (`metodo="sazonal"`), para reprodutibilidade. Melhorar a estimativa (vários anos, pooling entre municípios) só faz sentido com mais histórico.
+
+### Múltiplas comparações
+
+- **Hipótese nula, por série:** sem mudança, os resíduos padronizados `z_t` nas 12 semanas monitoradas são i.i.d. N(0,1).
+- **Estatística:** máximo bilateral do CUSUM.
+- **p-valor:** P(máximo nulo ≥ observado), com tabela de 100 mil sequências simuladas (semente fixa).
+- **Calibração** (teste `test_p_value_is_roughly_calibrated_under_the_null`): sob o nulo de Poisson, P(p < 0,05) fica entre 1% e 10%.
+- **Procedimento:** Benjamini–Hochberg com q = 0,10 sobre todas as séries elegíveis de cada atualização (~700 por categoria).
+
+**Resultado:**
+- **Nos dados reais**, o BH remove ~9% dos sinais e aumenta o ganho de forma pequena e consistente (2,33× → 2,37×; maior em todas as faixas e anos).
+- **Nos lotes simulados** (10% de mudanças reais e sazonalidade municipal), a proporção de falsas descobertas fica em 42–47% **com ou sem BH**. Os falsos alarmes vêm de desvios do modelo (sazonalidade não modelada), que também geram p-valores pequenos.
+
+**O BH controla a FDR só se o nulo estiver correto; aqui ele é aproximado.** Por isso o radar diz que ~1 em cada 3 sinais não se confirma, e não promete uma FDR de 10%.
+
+### Estabilidade temporal
+
+Só 41% dos sinais da participação reaparecem (mesma direção) na avaliação seguinte, 4 semanas depois; a referência fica em 44%. Isso motivou o histórico abaixo.
+
+## Histórico do Radar (`data/src/sinalbr_data/history.py`)
+
+**Por que não bastavam as tabelas atuais:** `gold/mudancas` guarda só a origem atual, e as anomalias guardavam só 26 semanas (agora 56). Sem snapshots não há como saber se um sinal é novo ou se já existia.
+
+**Esquema mínimo:**
+- `lake/history/radar_snapshots.parquet`: observações detectadas, com `versao_dados`, `semana_completa_ate`, `metodo`, `modo`, `origem`, `obs_id`, métricas e `gerado_em`.
+- `lake/history/radar_avaliadas.parquet`: séries avaliáveis por origem. É o que separa "não detectado" de "não avaliado".
+- `gold/radar_historico.parquet`: resumo por observação, lido pela API.
+
+**Identificador estável:** `tipo|categoria|cd_ibge|direção`. A data de início estimada não entra, porque oscila entre origens. Inverter a direção cria outra observação, e ela fica marcada com `mudou_direcao`.
+
+**Idempotência:** o bloco (versão dos dados, semana de referência, método) é substituído a cada execução. Outros blocos são preservados, então atualizações reais da SSP acumulam histórico. Testes impedem duplicações.
+
+**Modos:**
+- `reconstrucao`: 13 origens passadas recalculadas com os dados e o método atuais. **Não** é o que foi exibido na época, porque a fonte revisa dados.
+- `atualizacao`: a origem atual de cada versão.
+
+**Estados (mudanças persistentes):**
+- `novo`, `persistente`, `historico_insuficiente`;
+- `deixou_de_ser_detectado`: o critério deixou de ser atendido, o que **não** significa que a situação foi resolvida;
+- `sem_avaliacao_atual`.
+
+Picos semanais recebem `novo`, `recorrente` ou `anterior`, sem estado de encerramento, porque são eventos pontuais.
+
+**Na referência de 23/08/2026:** 55 mudanças, sendo 29 persistentes, 22 novas e 4 com histórico insuficiente; outras 30 deixaram de ser detectadas.

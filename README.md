@@ -21,12 +21,13 @@ Detalhes: [privacidade e LGPD](docs/privacidade.md) · [qualidade dos dados](doc
 |---|---|
 | **Pipeline** | Ingestão idempotente e incremental dos XLSX da SSP-SP (2022–2026, ~5,5 mi de BOs), limpeza, normalização de naturezas, validação de coordenadas, relatório de qualidade; camadas bronze/silver/gold em Parquet + DuckDB; agregação por H3, município e bairro. |
 | **Análises** | Mapa de calor por crime, tendência e sazonalidade, comparação entre anos, dia da semana × hora, taxas por 100 mil hab. (Censo 2022), picos semanais. |
-| **Radar territorial** | Porta de entrada da investigação. Reúne mudanças persistentes (CUSUM relativo ao padrão estadual, com avaliação retrospectiva), variações anuais fora do padrão do estado, picos semanais e avisos de dados, cada item com o critério que o fez aparecer. |
+| **Radar territorial** | Porta de entrada da investigação. Reúne mudanças persistentes (CUSUM relativo ao padrão estadual + controle de falsas descobertas de Benjamini–Hochberg), variações anuais fora do padrão do estado, picos semanais e avisos de dados. Cada item mostra o critério e o **histórico**: novo, persistente, histórico insuficiente ou deixou de ser detectado. |
 | **Comparador** | Até 4 municípios: contagem e taxa lado a lado, razão de taxas com intervalo de 95% aproximado, distribuição por tipo de crime, evolução mensal e CSV. |
 | **Qualidade** | Funil do pipeline, cobertura por ano e por tipo de crime, completude semanal, histórico de execuções e avaliação do detector de mudanças. |
 | **Previsão** | Registros esperados nas próximas 4 semanas por célula de ~5 km², com baselines simples e backtest de origem móvel sem vazamento. |
 | **Relatório** | Relatório analítico de 12 seções (estado ou município): resumo executivo calculado, indicadores, evolução, categorias, território, radar, qualidade, metodologia, limitações e fontes. PDF pela impressão do navegador. |
 | **API** | FastAPI tipada (Pydantic), paginação, filtros, cache, OpenAPI em `/docs`, exportação CSV, 503 explícito quando falta uma etapa do pipeline. |
+| **Investigar** | Aba do painel que testa se uma variação se sustenta (janelas, sazonalidade, incerteza, estado) e decompõe a variação do total por tipo de crime e por município. |
 | **Web** | Landing e produto em Next.js (MapLibre, deck.gl); filtros sincronizados com a URL, busca de municípios, análises salvas no navegador, tema claro/escuro, responsivo. |
 
 | Radar territorial | Comparador de municípios |
@@ -93,7 +94,7 @@ cd ../api && uv sync && uv run uvicorn app.main:app --port 8000
 cd ../web && npm install && npm run dev
 ```
 
-Etapas isoladas: `python -m sinalbr_data [bronze|silver|gold|analytics|forecast|quality]`.
+Etapas isoladas: `python -m sinalbr_data [bronze|silver|gold|analytics|changes|history|forecast|quality]` (`changes` também atualiza o histórico do radar).
 
 ### Testes e qualidade
 
@@ -109,14 +110,16 @@ CI no GitHub Actions ([`ci.yml`](.github/workflows/ci.yml)) roda tudo isso e o b
 
 | Endpoint | Para quê |
 |---|---|
-| `GET /v1/heatmap/h3` | Hexágonos H3 res. 8 com contagem (k ≥ 5) por crime e período |
+| `GET /v1/heatmap/h3` | Hexágonos H3 res. 8 (k ≥ 5, arredondados a múltiplos de 5), só em janelas de 3/6/12/24 meses até a data dos dados |
 | `GET /v1/municipios` | Ranking paginado com taxa por 100 mil hab. |
 | `GET /v1/series`, `/v1/tendencia`, `/v1/hora-dia` | Séries, tendência, sazonalidade, horário |
 | `GET /v1/municipios/lista` | Todos os municípios (busca), sem contagens |
 | `GET /v1/comparacao/{periodos,variacao-municipios,regioes,perfil}` | Comparações; `perfil` = comparador com razão de taxas e IC |
 | `GET /v1/anomalias` | Picos semanais recentes (filtro por município) |
 | `GET /v1/radar` | Observações com critérios explícitos (filtros por crime e município) |
-| `GET /v1/mudancas` | Mudanças persistentes e a avaliação do detector |
+| `GET /v1/mudancas` | Mudanças persistentes (com p-valor e BH) e a avaliação comparativa do detector |
+| `GET /v1/decomposicao` | Contribuição de cada tipo de crime (ou município) para a variação do total |
+| `GET /v1/robustez` | A variação se sustenta em outras janelas, na comparação sazonal e frente à incerteza? |
 | `GET /v1/qualidade` | Tabelas de qualidade, completude e histórico de execuções |
 | `GET /v1/previsao/{h3,backtest}` | Risco previsto e métricas de backtest |
 | `GET /v1/export/{municipios,celulas}.csv` | Exportação com supressão (e arredondamento por hexágono) aplicados |
@@ -127,9 +130,10 @@ Configuração (variáveis de ambiente, ver [`.env.example`](.env.example)): `SI
 
 - **Roubo no estado:** −20,3% nos registros dos últimos 12 meses completos vs. os 12 anteriores.
 - **Previsão:** o modelo reduz o erro de contagem em 14–18% frente a uma média de 12 semanas, mas o ganho em apontar *quais* células concentram mais ocorrências é de 0,1–0,5 p.p., quase no teto do oráculo (os pontos quentes são muito persistentes). Reportado como está.
-- **Mudanças persistentes:** 65–75% dos sinais do CUSUM se mantiveram nas 8 semanas seguintes, contra 26–35% por acaso. A referência simples confirma em proporção parecida; o ganho do CUSUM está na estimativa de início/magnitude e no desconto do movimento estadual ([docs/mudancas.md](docs/mudancas.md)).
+- **Mudanças persistentes:** comparamos o detector com uma referência simples e com um modelo que inclui a sazonalidade própria de cada município, no mesmo conjunto de 24.571 avaliações. O modelo sazonal **não** melhorou (pior sob a verdade neutra em todas as faixas e anos) e não foi adotado. O controle de falsas descobertas (BH) trouxe ganho pequeno e consistente (2,33× → 2,37× sobre o acaso). Só 41% dos sinais reaparecem 4 semanas depois, o que motivou o histórico do radar ([docs/mudancas.md](docs/mudancas.md)).
 - **Anomalias:** os maiores picos investigados coincidem com eventos de massa (estádio do Morumbi, festas), não com "ondas de crime".
-- **Privacidade:** a diferença entre as janelas de 12 e 6 meses do próprio painel revelava contagens de 1 a 4 em 273 hexágonos; corrigido com arredondamento ([docs/privacidade.md](docs/privacidade.md)).
+- **Privacidade:** duas rodadas de auditoria com ataques medidos no lake real. A primeira achou diferenciação entre janelas (273 hexágonos); a segunda, supressão complementar no comparador (70 municípios com contagem exata revelada) e no ranking (13). Todos foram corrigidos e são verificados por testes ([docs/privacidade.md](docs/privacidade.md)).
+- **Acessibilidade e desempenho (Lighthouse 12, Edge, desktop):** acessibilidade, boas práticas e SEO em 100 nas 5 páginas medidas. Desempenho de 99–100, exceto o painel (75), onde o custo é o JavaScript do mapa (MapLibre/deck.gl).
 - **Qualidade:** o layout da SSP muda entre anos (`DESCR_TIPOLOCAL` ausente em 2022–2024); a cobertura do mapa vai de 0% (crimes sexuais, ocultados pela fonte) a 92% (trânsito); furto não tem hora em ~43% dos BOs.
 
 ## Decisões técnicas
@@ -156,8 +160,8 @@ Convenções do projeto em [`CLAUDE.md`](CLAUDE.md).
 
 - Só São Paulo; para outro estado, adicionar a fonte, os aliases de colunas e o relatório de qualidade.
 - População fixa do Censo 2022 (sem projeções anuais).
-- O arredondamento por hexágono reduz, mas não elimina formalmente, a diferenciação entre muitas consultas; para uso público em produção, avaliar ruído diferencialmente privado.
-- O detector de mudanças não modela sazonalidade própria de municípios (ex.: litoral) nem corrige multiplicidade.
+- Sem garantia formal de privacidade: diferenças entre janelas no nível municipal ainda podem revelar somas pequenas (a SSP publica esses números mensalmente); o desenho de privacidade diferencial está documentado, mas não implementado.
+- O detector não modela a sazonalidade própria dos municípios (a alternativa foi testada e rejeitada) e o BH não garante a taxa real de falsas descobertas, porque o modelo nulo é aproximado. O histórico do radar é reconstruído com os dados atuais até que haja atualizações reais acumuladas.
 - Laboratório de hipóteses, alertas por e-mail e assistente com IA foram avaliados e adiados (motivos em [docs/auditoria-v2.md](docs/auditoria-v2.md)).
 - Sem intervalos de previsão; janela de backtest de 6 meses.
 - O relatório em PDF usa a impressão do navegador, não geração no servidor.

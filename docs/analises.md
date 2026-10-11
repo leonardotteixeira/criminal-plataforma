@@ -34,3 +34,29 @@ Itapecerica da Serra aparece com a maior taxa de roubo por 100 mil hab. (≈ 769
   - Não corrige diferenças de subnotificação ou de prática de registro. Quando o intervalo inclui 1, o texto diz que a diferença não se distingue da variação aleatória.
 - **Radar e mudanças persistentes:** método, critérios e avaliação em [mudancas.md](mudancas.md).
 - **Comparação entre anos** (aba Tempo e relatório): um traço por ano no eixo jan–dez, usando só meses completos.
+
+## v3: investigação (aba "Investigar" do painel)
+
+- **Decomposição das variações** (`GET /v1/decomposicao`): quanto cada tipo de crime (ou, para o estado, cada município) somou à variação do total entre os últimos N meses completos e os N anteriores. É aritmética: a soma das contribuições é a variação do total. Só entram itens com ≥ 5 registros nos dois períodos; os totais são a soma desses itens (agregação consistente). No recorte por município, os restantes viram "demais municípios" (só com 2 ou mais). Exemplo real: no estado, a variação total de −5,7% veio de roubo (61,6% da variação) e furto (60,7%); lesão corporal (−17,0%) e drogas (−8,4%) foram na direção contrária.
+- **Robustez da conclusão** (`GET /v1/robustez`): verifica se "aumentou/diminuiu" se sustenta:
+  - janelas de 6, 12 e 24 meses;
+  - mesmo trimestre do ano anterior (controla a sazonalidade);
+  - intervalo de 95% da razão de 12 meses, com Poisson × superdispersão mensal;
+  - comparação com o estado (pontos percentuais).
+
+  Vereditos:
+  - `consistente`;
+  - `parcialmente_consistente`: nenhuma janela aponta a direção oposta, mas alguma fica estável (< 5%). Típico de mudança já ocorrida que se mantém;
+  - `sensivel_a_janela`: a direção se inverte;
+  - `indistinguivel_do_ruido`: o intervalo inclui 1;
+  - `insuficiente`.
+
+  Exemplos reais:
+  - roubo no estado: consistente;
+  - Sorocaba/drogas: parcialmente consistente (+113% em 12 meses, +2,6% em 6 meses);
+  - Campinas/homicídio: indistinguível do ruído (+23% em 12 meses, IC inclui 1).
+
+  O resultado inclui o que a cobertura dos dados (local e hora) permite concluir para o tipo.
+- **Descartadas nesta rodada:**
+  - municípios "semelhantes": exige definir e validar uma métrica de similaridade;
+  - perguntas guiadas e chatbot: a aba Investigar + o radar já cobrem as perguntas-exemplo com operações verificáveis.

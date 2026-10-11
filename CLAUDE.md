@@ -9,8 +9,8 @@ Plataforma de inteligência criminal com dados abertos e agregados (SSP-SP + IBG
 - Sem dados fictícios: se uma fonte falhar, dizer explicitamente.
 
 ## Estrutura
-- `data/` pipeline Python (uv): `bronze.py` → `silver.py` → `gold.py` → `analytics.py` (anomalias, meta) → `changes.py` (mudanças persistentes + avaliação) → `forecast.py` → `quality.py` (tabelas de qualidade, histórico). Lake em `data/lake/` (git-ignorado).
-- `api/` FastAPI + DuckDB lendo Parquet gold. Tabelas opcionais ausentes → 503 com a etapa a rodar (`db.require`). Rotas: `main.py`, `analysis.py`, `radar.py`, `qualidade.py`, `previsao.py`.
+- `data/` pipeline Python (uv): `bronze.py` → `silver.py` → `gold.py` → `analytics.py` (anomalias, meta) → `changes.py` (mudanças persistentes + avaliação comparativa) → `history.py` (snapshots idempotentes do radar em `lake/history/`) → `forecast.py` → `quality.py` (tabelas de qualidade, histórico). Lake em `data/lake/` (git-ignorado).
+- `api/` FastAPI + DuckDB lendo Parquet gold. Tabelas opcionais ausentes → 503 com a etapa a rodar (`db.require`). Rotas: `main.py`, `analysis.py`, `radar.py`, `qualidade.py`, `previsao.py`, `investigacao.py`. Controles de divulgação centralizados em `protecao.py` (k-mínimo, agregação consistente, janelas ancoradas, arredondamento): use-os em qualquer endpoint novo.
 - `web/` Next.js + Tailwind + MapLibre/deck.gl. Páginas: `/`, `/dashboard`, `/radar`, `/comparar`, `/qualidade`, `/relatorio`. Componentes base em `components/ui.tsx` (Card, Notice, StateMessage, Delta, Badge); chamadas à API só via `lib/api.ts`; carregamento via `lib/useLoad.ts`.
 - `docs/` plano, privacidade, qualidade, análises, previsão, `img/` (screenshots do README).
 
@@ -25,6 +25,8 @@ Plataforma de inteligência criminal com dados abertos e agregados (SSP-SP + IBG
 - Variações de registros usam seta + texto em cor neutra (`Delta`): aumento de registros nunca é "verde". Cores semânticas: `danger`, `warning`, `info`; séries em paleta Okabe-Ito com traços diferentes.
 - Estado de telas analíticas vai para a URL (compartilhável e salvável).
 - Toda nova análise: critérios explícitos, sem linguagem causal, estado vazio explicativo e teste.
+- Mudar o método do detector exige rodar a avaliação comparativa (`changes`) e só adotar com ganho sob a verdade T1; atualizar `METODO_VERSAO` mantém o histórico separado por método.
+- Totais "todos os crimes" devem usar `agregado(...)`; nunca somar categorias suprimidas.
 - Python 3.11 (sem sintaxe PEP 695). Código e identificadores de domínio em português; mensagens ao usuário em pt-BR.
 - Arquivos em UTF-8; use `encoding="utf-8"` explícito (Windows).
 - Neste ambiente Windows, `pandas`, `pyarrow` e `h3` são bloqueados por política de aplicativos: use DuckDB (inclui extensão `h3`) para I/O Parquet e H3.

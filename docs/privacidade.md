@@ -71,3 +71,52 @@ A função "Salvar visão" grava filtros e URLs só no `localStorage` do navegad
 - BOs refletem **registro**, não o crime real. A subnotificação varia por tipo de crime, bairro e perfil da vítima.
 - Áreas com mais policiamento tendem a registrar mais; modelos treinados nesses dados podem **reforçar vieses de policiamento**.
 - Os meses mais recentes são parciais por atraso de registro.
+
+## Revisão v3 (2026-10-11): auditoria de endpoints e controles adicionais
+
+### Vazamentos encontrados e corrigidos (medidos no lake real)
+
+| Vazamento | Mecanismo | Antes | Depois | Controle |
+|---|---|---:|---:|---|
+| Comparador | total do município − categorias exibidas = categoria suprimida | 70 de 645 municípios com contagem exata revelada | 0 | Agregação consistente |
+| Ranking "todos os crimes" | total − soma dos 8 rankings por categoria | 13 (nos 100 primeiros) | 0 | Agregação consistente |
+| Tendência municipal | pontos mensais de 1 a 4 publicados | presentes (ex.: 2/mês) | 0 | Supressão de pontos |
+| `/v1/series` | suprimido devolvido como `0` | 100% dos pontos suprimidos | nulo + `suprimido` | Semântica explícita |
+| Hexágonos | janela arbitrária isolava um mês por diferença | aceito | HTTP 422 | Janelas ancoradas |
+
+### Controles (código em `api/app/protecao.py`)
+
+1. **k-mínimo (5)** em toda contagem publicada.
+2. **Agregação consistente:** qualquer total "todos os crimes" (mapa, ranking, CSV, séries, comparador, decomposição) é a soma das categorias que seriam publicadas isoladamente no mesmo recorte. Assim, "total − categorias exibidas" é sempre 0.
+3. **Supressão de pontos com estatísticas derivadas protegidas:**
+   - meses abaixo de k numa série municipal ficam nulos;
+   - variação de 12 meses, inclinação e sazonalidade só são calculadas se nenhum ponto da janela foi suprimido. Do contrário, combinadas aos pontos publicados, permitiriam recalcular o valor oculto.
+4. **Hexágonos:**
+   - janelas ancoradas de 3, 6, 12 ou 24 meses terminando na data dos dados;
+   - contagens arredondadas para múltiplos de 5.
+
+   A diferença entre duas janelas publicadas só delimita o valor real num intervalo de largura ≥ 5 (ex.: [0, 4] ou [1, 9]); nunca revela uma contagem exata.
+5. **Textos do radar** nunca escrevem contagens abaixo de k ("menos de 5").
+6. **Mapa e exportação** usam a mesma função (`_heatmap`): o CSV não tem informação a mais que o mapa.
+
+### O que continua sem garantia formal
+
+- **Diferença entre janelas no nível municipal.** Em `/v1/comparacao/periodos` (janelas livres) e no perfil (6/12/24 meses), a diferença entre janelas ainda pode revelar a soma de meses com poucos registros num município pequeno. Mantido por utilidade e porque a SSP já publica estatísticas mensais por município.
+- **Inferência por limites.** Uma diferença publicada 0 entre janelas de hexágono indica que o bloco teve entre 0 e 4 registros. É informação de limite superior, não um valor exato.
+- **Ataques com conhecimento externo** (alguém que conhece um evento específico) não são cobertos por k-anonimato nem por arredondamento.
+
+### Desenho recomendado se o produto for público (não implementado)
+
+- **Modelo de ameaça:** um usuário com acesso ilimitado à API tenta inferir, por combinação de consultas, a contagem de um hexágono × mês × categoria, ou a presença de um evento específico.
+- **Consultas protegidas:** apenas um conjunto **fixo e pré-calculado** de liberações (hexágono × janela ancorada × categoria). A API deixaria de calcular agregados sob demanda.
+- **Mecanismo:** ruído geométrico (Laplace discreto) com sensibilidade 1 por evento, aplicado uma vez na geração. As liberações ficam congeladas, então repetir a consulta não reduz o ruído.
+- **Composição do orçamento:** cada evento entra em até 4 janelas × 2 agregações (categoria e total consistente). Com ε por liberação, o orçamento por atualização é ε_total = 8ε (composição sequencial); entre atualizações, as janelas se sobrepõem e o orçamento se acumula.
+- **Validação:**
+  - erro relativo das células com ≥ 30 registros < 10%;
+  - estabilidade dos rankings (correlação de Spearman com o dado exato);
+  - impacto nas análises (radar e previsão recalculados sobre os dados ruidosos);
+  - teste empírico de ataque de diferenciação nas liberações.
+- **Por que não agora:**
+  - exige liberar só tabelas pré-calculadas (perde a consulta flexível);
+  - a previsão e o radar precisariam usar os mesmos dados ruidosos;
+  - escolher ε exige uma decisão de política, não só técnica.

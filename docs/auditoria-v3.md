@@ -31,3 +31,17 @@
 | D. Cobertura | Médio | Médio | Baixo | Baixa | — | — | Baixa | Parcial (já existe aviso no mapa); reforço pontual |
 | E. Perguntas guiadas / chatbot | Baixo | Médio | Médio | Alta | Alto | Médio | Alta | Descartado nesta rodada: radar + robustez já guiam a investigação |
 | Privacidade diferencial formal | Alto | — | Alto | Alta | — | reduz | Alta | Documentado (modelo de ameaça e desenho); fora do escopo |
+
+## Resultado da rodada
+
+| Item | Situação |
+|---|---|
+| 1–4 Privacidade | Corrigidos com agregação consistente, supressão de pontos e janelas ancoradas; vazamentos remedidos = 0 (`docs/privacidade.md`) |
+| 5 Sazonalidade municipal | Implementada, avaliada e **rejeitada** (sem ganho sob T1; converge com encolhimento forte) |
+| 6 Múltiplas comparações | p-valor do CUSUM + Benjamini–Hochberg adotado; limitação documentada (o nulo é aproximado) |
+| 7 Histórico do radar | Snapshots idempotentes + estados; reconstrução retrospectiva rotulada |
+| B Decomposição | `GET /v1/decomposicao` + aba Investigar |
+| C Robustez | `GET /v1/robustez` + aba Investigar |
+| Lighthouse | Medido com Edge (Lighthouse 12): a11y/bp/SEO = 100 em todas as páginas; CLS da página Qualidade corrigido (0,82 → 0,009) |
+| Docker | **Não validado**: `docker` indisponível no ambiente |
+| CI | Workflow validado sintaticamente e comandos executados localmente; não executado no GitHub (sem push) |
