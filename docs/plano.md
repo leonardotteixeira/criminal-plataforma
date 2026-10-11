@@ -11,4 +11,4 @@ Fontes confirmadas (testadas em 2026-10-10):
 | 2 ✅ | Análises: temporal, comparação normalizada, anomalias | Endpoints + testes; resultados validados |
 | 3 ✅ | Previsão de risco com backtesting | Baseline vs. modelo, métricas honestas |
 | 4 ✅ | Landing, dashboard completo, PDF/CSV, dark mode, a11y | Lighthouse a11y razoável |
-| 5 | Docker, CI, pre-commit, README com screenshots | CI verde |
+| 5 ✅ | Docker, CI, pre-commit, README com screenshots | CI verde |

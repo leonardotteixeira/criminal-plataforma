@@ -1,0 +1,37 @@
+# Instalação: pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.(md|png)$
+      - id: end-of-file-fixer
+        exclude: \.(png|ico)$
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^(data|api)/
+      - id: ruff-format
+        files: ^(data|api)/
+
+  - repo: local
+    hooks:
+      # Privacidade: dados brutos e o lake nunca devem entrar no repositório.
+      - id: no-raw-data
+        name: bloquear dados brutos/lake
+        entry: Dados brutos e o lake não podem ser versionados (ver docs/privacidade.md)
+        language: fail
+        files: ^data/(raw|lake)/|\.(xlsx|parquet|duckdb)$
+      - id: web-lint
+        name: eslint + tsc (web)
+        entry: bash -c 'cd web && npm run lint && npm run typecheck'
+        language: system
+        files: ^web/.*\.(ts|tsx|mjs|css)$
+        pass_filenames: false

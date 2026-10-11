@@ -1,0 +1,43 @@
+# Sobe tudo com um comando:  docker compose up --build
+# Na primeira execução o pipeline baixa ~1 GB da SSP-SP e leva ~15 min; depois é incremental
+# (só reprocessa anos cujo arquivo remoto mudou) e termina em segundos.
+services:
+  pipeline:
+    build: ./data
+    volumes:
+      - lake:/app/lake
+      - raw:/app/raw
+    restart: "no"
+
+  api:
+    build: ./api
+    depends_on:
+      pipeline:
+        condition: service_completed_successfully
+    environment:
+      SINALBR_CORS: ${SINALBR_CORS:-http://localhost:3000}
+      SINALBR_K_MIN: ${SINALBR_K_MIN:-5}
+    volumes:
+      - lake:/lake:ro
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/v1/meta')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+volumes:
+  lake:
+  raw:

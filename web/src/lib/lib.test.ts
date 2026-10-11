@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { rampColor } from "@/components/colorRamp";
 import { scaleMax } from "@/components/scale";
-import { isoDate, lastCompleteMonthEnd, monthsBack } from "@/lib/dates";
+import {
+  isoDate,
+  lastCompleteMonthEnd,
+  monthsBack,
+  yearOverYearWindows,
+} from "@/lib/dates";
 
 describe("dates", () => {
   it("monthsBack inclui o mês de fim e começa no dia 1", () => {
@@ -13,6 +18,17 @@ describe("dates", () => {
     expect(isoDate(lastCompleteMonthEnd("2026-08-23"))).toBe("2026-07-31");
     expect(isoDate(lastCompleteMonthEnd("2026-08-31"))).toBe("2026-08-31");
     expect(isoDate(lastCompleteMonthEnd("2026-01-10"))).toBe("2025-12-31");
+  });
+});
+
+describe("janelas ano a ano", () => {
+  it("usa 12 meses completos vs. 12 anteriores, sem deslocar por fuso", () => {
+    expect(yearOverYearWindows("2026-08-23")).toEqual({
+      iniA: "2024-08-01",
+      fimA: "2025-07-31",
+      iniB: "2025-08-01",
+      fimB: "2026-07-31",
+    });
   });
 });
 

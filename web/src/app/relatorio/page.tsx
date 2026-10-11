@@ -17,7 +17,7 @@ import {
   type MunicipioRow,
   type Tendencia,
 } from "@/lib/api";
-import { isoDate, lastCompleteMonthEnd, monthsBack } from "@/lib/dates";
+import { monthsBack, yearOverYearWindows } from "@/lib/dates";
 
 type Data = {
   meta: Meta;
@@ -47,19 +47,17 @@ function Report() {
         inicio: monthsBack(meta.dados_ate, meses),
         fim: meta.dados_ate,
       };
-      const fimB = lastCompleteMonthEnd(meta.completo_ate);
-      const y = fimB.getFullYear();
-      const m = fimB.getMonth();
+      const w = yearOverYearWindows(meta.completo_ate);
       const [heat, rank, tend, cmp] = await Promise.all([
         api.heatmap(p),
         api.municipios({ ...p, page_size: 15 }),
         analysis.tendencia({ categoria }),
         analysis.comparar({
           categoria,
-          inicio_a: isoDate(new Date(y - 2, m + 1, 1)),
-          fim_a: isoDate(new Date(y - 1, m + 1, 0)),
-          inicio_b: isoDate(new Date(y - 1, m + 1, 1)),
-          fim_b: isoDate(fimB),
+          inicio_a: w.iniA,
+          fim_a: w.fimA,
+          inicio_b: w.iniB,
+          fim_b: w.fimB,
         }),
       ]);
       setData({

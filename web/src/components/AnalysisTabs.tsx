@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { yearOverYearWindows } from "@/lib/dates";
 import { HourDowGrid, LineChart, SeasonBars } from "@/components/Charts";
 import {
   analysis,
@@ -134,25 +135,7 @@ export function TimeTab({ categoria, cdIbge, municipio }: Props) {
 }
 
 export function CompareBox({ categoria, cdIbge, completoAte }: Props) {
-  // Último ano completo vs. ano anterior, terminando um mês antes dos dados mais recentes.
-  // Último mês totalmente completo: se a data de completude não é o fim do mês, recua um mês.
-  const ref = new Date(completoAte + "T00:00:00");
-  const lastDay = new Date(ref.getFullYear(), ref.getMonth() + 1, 0).getDate();
-  const end = new Date(
-    ref.getFullYear(),
-    ref.getMonth() + (ref.getDate() >= lastDay ? 1 : 0),
-    0,
-  );
-  const fimB = end.toISOString().slice(0, 10);
-  const iniB = new Date(end.getFullYear() - 1, end.getMonth() + 1, 1)
-    .toISOString()
-    .slice(0, 10);
-  const fimA = new Date(end.getFullYear() - 1, end.getMonth() + 1, 0)
-    .toISOString()
-    .slice(0, 10);
-  const iniA = new Date(end.getFullYear() - 2, end.getMonth() + 1, 1)
-    .toISOString()
-    .slice(0, 10);
+  const { iniA, fimA, iniB, fimB } = yearOverYearWindows(completoAte);
   const c = useLoad<ComparacaoPeriodos>(
     () =>
       analysis.comparar({

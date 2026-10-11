@@ -11,12 +11,13 @@ Plataforma de inteligência criminal com dados abertos e agregados (SSP-SP + IBG
 ## Estrutura
 - `data/` pipeline Python (uv): `bronze.py` → `silver.py` → `gold.py`, `quality.py`, `ibge.py`. Lake em `data/lake/` (git-ignorado).
 - `api/` FastAPI + DuckDB lendo Parquet gold. `web/` Next.js + Tailwind + MapLibre/deck.gl.
-- `docs/` plano, privacidade, qualidade dos dados.
+- `docs/` plano, privacidade, qualidade, análises, previsão, `img/` (screenshots do README).
 
 ## Comandos
 - Pipeline: `cd data && uv run python -m sinalbr_data [bronze|silver|gold|analytics|forecast|quality|all]`
 - API: `cd api && uv run uvicorn app.main:app --port 8000`; testes `uv run pytest`
 - Web: `cd web && npm run dev`; `npx tsc --noEmit && npx eslint src`
+- Docker: `docker compose up --build` (pipeline → api → web). Pre-commit: `.pre-commit-config.yaml`. CI: `.github/workflows/ci.yml`.
 - Lint Python: `uv run ruff check . && uv run ruff format .`
 
 ## Convenções

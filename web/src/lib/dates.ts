@@ -21,3 +21,16 @@ export function isoDate(d: Date): string {
   const p = (x: number) => String(x).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
+
+/** Janelas A (12 meses anteriores) e B (últimos 12 meses completos), em ISO, sem depender de fuso. */
+export function yearOverYearWindows(completoAte: string) {
+  const end = lastCompleteMonthEnd(completoAte);
+  const y = end.getFullYear();
+  const m = end.getMonth();
+  return {
+    iniA: isoDate(new Date(y - 2, m + 1, 1)),
+    fimA: isoDate(new Date(y - 1, m + 1, 0)),
+    iniB: isoDate(new Date(y - 1, m + 1, 1)),
+    fimB: isoDate(end),
+  };
+}

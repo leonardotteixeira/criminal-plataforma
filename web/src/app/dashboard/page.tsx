@@ -2,7 +2,8 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import {
   AlertsTab,
   CATS_PREVISAO,
@@ -38,15 +39,20 @@ const PERIODOS = [
   { id: 24, label: "24 meses" },
 ];
 
-export default function Dashboard() {
+type Tab = "geral" | "tempo" | "alertas" | "previsao";
+const TABS: Tab[] = ["geral", "tempo", "alertas", "previsao"];
+
+// Estado inicial vem da URL (?categoria=&meses=&aba=), o que torna uma visão compartilhável.
+function DashboardInner() {
+  const sp = useSearchParams();
   const [meta, setMeta] = useState<Meta | null>(null);
   const [cats, setCats] = useState<Categoria[]>([]);
-  const [categoria, setCategoria] = useState("roubo");
-  const [meses, setMeses] = useState(12);
+  const [categoria, setCategoria] = useState(sp.get("categoria") ?? "roubo");
+  const [meses, setMeses] = useState(Number(sp.get("meses")) || 12);
   const [heat, setHeat] = useState<Heatmap | null>(null);
   const [rank, setRank] = useState<MunicipioRow[]>([]);
-  const [tab, setTab] = useState<"geral" | "tempo" | "alertas" | "previsao">(
-    "geral",
+  const [tab, setTab] = useState<Tab>(
+    TABS.find((x) => x === sp.get("aba")) ?? "geral",
   );
   const [sel, setSel] = useState<MunicipioRow | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -331,5 +337,19 @@ export default function Dashboard() {
         </aside>
       </div>
     </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <Suspense
+      fallback={
+        <p role="status" className="p-6">
+          Carregando…
+        </p>
+      }
+    >
+      <DashboardInner />
+    </Suspense>
   );
 }
