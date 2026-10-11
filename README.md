@@ -20,18 +20,26 @@ Detalhes: [privacidade e LGPD](docs/privacidade.md) · [qualidade dos dados](doc
 | | |
 |---|---|
 | **Pipeline** | Ingestão idempotente e incremental dos XLSX da SSP-SP (2022–2026, ~5,5 mi de BOs), limpeza, normalização de naturezas, validação de coordenadas, relatório de qualidade; camadas bronze/silver/gold em Parquet + DuckDB; agregação por H3, município e bairro. |
-| **Análises** | Mapa de calor por crime, tendência e sazonalidade, dia da semana × hora, comparação entre períodos e regiões (taxa por 100 mil hab., Censo 2022), detecção de anomalias semanais. |
+| **Análises** | Mapa de calor por crime, tendência e sazonalidade, comparação entre anos, dia da semana × hora, taxas por 100 mil hab. (Censo 2022), picos semanais. |
+| **Radar territorial** | Porta de entrada da investigação. Reúne mudanças persistentes (CUSUM relativo ao padrão estadual, com avaliação retrospectiva), variações anuais fora do padrão do estado, picos semanais e avisos de dados, cada item com o critério que o fez aparecer. |
+| **Comparador** | Até 4 municípios: contagem e taxa lado a lado, razão de taxas com intervalo de 95% aproximado, distribuição por tipo de crime, evolução mensal e CSV. |
+| **Qualidade** | Funil do pipeline, cobertura por ano e por tipo de crime, completude semanal, histórico de execuções e avaliação do detector de mudanças. |
 | **Previsão** | Registros esperados nas próximas 4 semanas por célula de ~5 km², com baselines simples e backtest de origem móvel sem vazamento. |
-| **API** | FastAPI tipada (Pydantic), paginação, filtros, cache, OpenAPI em `/docs`, exportação CSV. |
-| **Web** | Landing institucional e painel (Next.js, MapLibre, deck.gl), tema claro/escuro, responsivo, relatório imprimível (PDF). |
+| **Relatório** | Relatório analítico de 12 seções (estado ou município): resumo executivo calculado, indicadores, evolução, categorias, território, radar, qualidade, metodologia, limitações e fontes. PDF pela impressão do navegador. |
+| **API** | FastAPI tipada (Pydantic), paginação, filtros, cache, OpenAPI em `/docs`, exportação CSV, 503 explícito quando falta uma etapa do pipeline. |
+| **Web** | Landing e produto em Next.js (MapLibre, deck.gl); filtros sincronizados com a URL, busca de municípios, análises salvas no navegador, tema claro/escuro, responsivo. |
 
-| Previsão com backtest | Série, sazonalidade e horário |
+| Radar territorial | Comparador de municípios |
 |---|---|
-| ![Previsão](docs/img/dashboard-previsao.png) | ![Tempo](docs/img/dashboard-tempo.png) |
+| ![Radar](docs/img/radar.png) | ![Comparar](docs/img/comparar.png) |
 
-| Alertas de anomalia | Relatório (PDF) |
+| Série, comparação entre anos e horário | Qualidade dos dados |
 |---|---|
-| ![Alertas](docs/img/dashboard-alertas.png) | ![Relatório](docs/img/relatorio.png) |
+| ![Tempo](docs/img/dashboard-tempo.png) | ![Qualidade](docs/img/qualidade.png) |
+
+| Previsão com backtest | Relatório (PDF) |
+|---|---|
+| ![Previsão](docs/img/dashboard-previsao.png) | ![Relatório](docs/img/relatorio.png) |
 
 > Nas capturas, o mapa-base (CARTO) não carregou no navegador headless usado para gerar as imagens; no navegador comum ele aparece sob os hexágonos.
 
@@ -48,8 +56,10 @@ flowchart LR
         S --> G["gold<br/>agregados H3/município/bairro<br/>× mês/semana × crime"]
         G --> A["analytics<br/>anomalias"]
         G --> F["forecast<br/>previsão + backtest"]
+        G --> M["changes<br/>mudanças persistentes + avaliação"]
+        S --> Q["quality<br/>tabelas de qualidade + histórico"]
     end
-    G & A & F --> P[("Parquet")]
+    G & A & F & M & Q --> P[("Parquet")]
     P --> API["api/ FastAPI + DuckDB<br/>k-mínimo, cache, OpenAPI"]
     API --> WEB["web/ Next.js<br/>MapLibre + deck.gl"]
 ```
@@ -102,17 +112,25 @@ CI no GitHub Actions ([`ci.yml`](.github/workflows/ci.yml)) roda tudo isso e o b
 | `GET /v1/heatmap/h3` | Hexágonos H3 res. 8 com contagem (k ≥ 5) por crime e período |
 | `GET /v1/municipios` | Ranking paginado com taxa por 100 mil hab. |
 | `GET /v1/series`, `/v1/tendencia`, `/v1/hora-dia` | Séries, tendência, sazonalidade, horário |
-| `GET /v1/comparacao/{periodos,variacao-municipios,regioes}` | Comparações |
-| `GET /v1/anomalias` | Aumentos incomuns recentes |
+| `GET /v1/municipios/lista` | Todos os municípios (busca), sem contagens |
+| `GET /v1/comparacao/{periodos,variacao-municipios,regioes,perfil}` | Comparações; `perfil` = comparador com razão de taxas e IC |
+| `GET /v1/anomalias` | Picos semanais recentes (filtro por município) |
+| `GET /v1/radar` | Observações com critérios explícitos (filtros por crime e município) |
+| `GET /v1/mudancas` | Mudanças persistentes e a avaliação do detector |
+| `GET /v1/qualidade` | Tabelas de qualidade, completude e histórico de execuções |
 | `GET /v1/previsao/{h3,backtest}` | Risco previsto e métricas de backtest |
-| `GET /v1/export/{municipios,celulas}.csv` | Exportação com supressão aplicada |
+| `GET /v1/export/{municipios,celulas}.csv` | Exportação com supressão (e arredondamento por hexágono) aplicados |
+
+Configuração (variáveis de ambiente, ver [`.env.example`](.env.example)): `SINALBR_LAKE`, `SINALBR_K_MIN` (5), `SINALBR_CELL_ROUND` (5), `SINALBR_CORS`, `SINALBR_CACHE_TTL`, `SINALBR_BRAND`, `NEXT_PUBLIC_API_URL`.
 
 ## Resultados e achados (dados reais)
 
 - **Roubo no estado:** −20,3% nos registros dos últimos 12 meses completos vs. os 12 anteriores.
 - **Previsão:** o modelo reduz o erro de contagem em 14–18% frente a uma média de 12 semanas, mas o ganho em apontar *quais* células concentram mais ocorrências é de 0,1–0,5 p.p., quase no teto do oráculo (os pontos quentes são muito persistentes). Reportado como está.
+- **Mudanças persistentes:** 65–75% dos sinais do CUSUM se mantiveram nas 8 semanas seguintes, contra 26–35% por acaso. A referência simples confirma em proporção parecida; o ganho do CUSUM está na estimativa de início/magnitude e no desconto do movimento estadual ([docs/mudancas.md](docs/mudancas.md)).
 - **Anomalias:** os maiores picos investigados coincidem com eventos de massa (estádio do Morumbi, festas), não com "ondas de crime".
-- **Qualidade:** o layout dos arquivos da SSP muda entre anos; ~30% dos BOs não têm hora.
+- **Privacidade:** a diferença entre as janelas de 12 e 6 meses do próprio painel revelava contagens de 1 a 4 em 273 hexágonos; corrigido com arredondamento ([docs/privacidade.md](docs/privacidade.md)).
+- **Qualidade:** o layout da SSP muda entre anos (`DESCR_TIPOLOCAL` ausente em 2022–2024); a cobertura do mapa vai de 0% (crimes sexuais, ocultados pela fonte) a 92% (trânsito); furto não tem hora em ~43% dos BOs.
 
 ## Decisões técnicas
 
@@ -126,10 +144,10 @@ CI no GitHub Actions ([`ci.yml`](.github/workflows/ci.yml)) roda tudo isso e o b
 ## Estrutura
 
 ```
-data/   pipeline Python (uv): bronze, silver, gold, analytics, forecast, quality, ibge
-api/    FastAPI + DuckDB sobre o Parquet gold
-web/    Next.js + Tailwind + MapLibre/deck.gl (landing, painel, relatório)
-docs/   plano, privacidade, qualidade, análises, previsão, imagens
+data/   pipeline Python (uv): bronze, silver, gold, analytics, changes, forecast, quality, ibge
+api/    FastAPI + DuckDB sobre o Parquet gold (main, analysis, radar, qualidade, previsao)
+web/    Next.js + Tailwind + MapLibre/deck.gl (landing, painel, radar, comparar, qualidade, relatório)
+docs/   plano, auditoria v2, privacidade, qualidade, análises, mudanças, previsão, imagens
 ```
 
 Convenções do projeto em [`CLAUDE.md`](CLAUDE.md).
@@ -138,7 +156,9 @@ Convenções do projeto em [`CLAUDE.md`](CLAUDE.md).
 
 - Só São Paulo; para outro estado, adicionar a fonte, os aliases de colunas e o relatório de qualidade.
 - População fixa do Censo 2022 (sem projeções anuais).
-- A supressão k-mínimo não impede diferenciação entre consultas sobrepostas; para uso público em produção, avaliar ruído diferencial.
+- O arredondamento por hexágono reduz, mas não elimina formalmente, a diferenciação entre muitas consultas; para uso público em produção, avaliar ruído diferencialmente privado.
+- O detector de mudanças não modela sazonalidade própria de municípios (ex.: litoral) nem corrige multiplicidade.
+- Laboratório de hipóteses, alertas por e-mail e assistente com IA foram avaliados e adiados (motivos em [docs/auditoria-v2.md](docs/auditoria-v2.md)).
 - Sem intervalos de previsão; janela de backtest de 6 meses.
 - O relatório em PDF usa a impressão do navegador, não geração no servidor.
 - Sem licença definida; escolha uma antes de publicar.

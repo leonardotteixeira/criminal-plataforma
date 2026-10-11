@@ -40,3 +40,20 @@ Auditoria feita lendo o código e consultando o lake real (não só o README). "
 | J. Laboratório de hipóteses | Médio | Alta | Alta | Alto | **Adiado**: o radar + comparador já respondem às perguntas-exemplo de forma guiada |
 | K. Alertas configuráveis | Baixo | Baixa | Média | — | **Adiado**: sem infraestrutura de notificação, seriam análises salvas |
 | L. Assistente com IA | Baixo | Média | Alta | Alto | **Não agora**: exige credenciais/custo e não acrescenta análise verificável nova |
+
+## Resultado da rodada
+
+| # | Situação |
+|---|---|
+| 1 | Feito: arredondamento por hexágono (API e CSV), teste e documentação do risco residual |
+| 2 | Feito: `dados_ate` = fim da última semana não residual (agora 30/08/2026) |
+| 3, 4 | Feito: seletor pesquisável (combobox acessível) e URL sincronizada no painel, radar e comparador |
+| 5 | Feito: página `/comparar` + `GET /v1/comparacao/perfil` |
+| 6 | Feito: `changes.py` (CUSUM relativo ao estado) com simulação e retrospectiva; ver mudancas.md |
+| 7 | Feito: `/radar` + `GET /v1/radar` |
+| 8 | Feito: tabelas de qualidade, histórico de execuções, `/qualidade` |
+| 9 | Feito: relatório de 12 seções, estado ou município |
+| 10 | Feito: `SINALBR_BRAND` |
+| 11, 12 | Feito: `ui.tsx`, cores semânticas, gráfico multi-série com eixos/unidade/legenda |
+| 13 | Feito: `cd_ibge` em `/v1/anomalias` e na aba Alertas |
+| 15 | Medido: sem modelagem de sazonalidade municipal; documentado como limitação |

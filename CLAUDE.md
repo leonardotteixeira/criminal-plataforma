@@ -9,8 +9,9 @@ Plataforma de inteligência criminal com dados abertos e agregados (SSP-SP + IBG
 - Sem dados fictícios: se uma fonte falhar, dizer explicitamente.
 
 ## Estrutura
-- `data/` pipeline Python (uv): `bronze.py` → `silver.py` → `gold.py`, `quality.py`, `ibge.py`. Lake em `data/lake/` (git-ignorado).
-- `api/` FastAPI + DuckDB lendo Parquet gold. `web/` Next.js + Tailwind + MapLibre/deck.gl.
+- `data/` pipeline Python (uv): `bronze.py` → `silver.py` → `gold.py` → `analytics.py` (anomalias, meta) → `changes.py` (mudanças persistentes + avaliação) → `forecast.py` → `quality.py` (tabelas de qualidade, histórico). Lake em `data/lake/` (git-ignorado).
+- `api/` FastAPI + DuckDB lendo Parquet gold. Tabelas opcionais ausentes → 503 com a etapa a rodar (`db.require`). Rotas: `main.py`, `analysis.py`, `radar.py`, `qualidade.py`, `previsao.py`.
+- `web/` Next.js + Tailwind + MapLibre/deck.gl. Páginas: `/`, `/dashboard`, `/radar`, `/comparar`, `/qualidade`, `/relatorio`. Componentes base em `components/ui.tsx` (Card, Notice, StateMessage, Delta, Badge); chamadas à API só via `lib/api.ts`; carregamento via `lib/useLoad.ts`.
 - `docs/` plano, privacidade, qualidade, análises, previsão, `img/` (screenshots do README).
 
 ## Comandos
@@ -21,6 +22,9 @@ Plataforma de inteligência criminal com dados abertos e agregados (SSP-SP + IBG
 - Lint Python: `uv run ruff check . && uv run ruff format .`
 
 ## Convenções
+- Variações de registros usam seta + texto em cor neutra (`Delta`): aumento de registros nunca é "verde". Cores semânticas: `danger`, `warning`, `info`; séries em paleta Okabe-Ito com traços diferentes.
+- Estado de telas analíticas vai para a URL (compartilhável e salvável).
+- Toda nova análise: critérios explícitos, sem linguagem causal, estado vazio explicativo e teste.
 - Python 3.11 (sem sintaxe PEP 695). Código e identificadores de domínio em português; mensagens ao usuário em pt-BR.
 - Arquivos em UTF-8; use `encoding="utf-8"` explícito (Windows).
 - Neste ambiente Windows, `pandas`, `pyarrow` e `h3` são bloqueados por política de aplicativos: use DuckDB (inclui extensão `h3`) para I/O Parquet e H3.

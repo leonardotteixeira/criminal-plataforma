@@ -25,3 +25,12 @@ Itapecerica da Serra aparece com a maior taxa de roubo por 100 mil hab. (≈ 769
 
 ## Resultado agregado (roubo, estado de SP)
 Últimos 12 meses completos vs. 12 anteriores: **−20,3%** em registros (163,3 mil vs. 204,9 mil). É variação de **registros**, e mudanças de prática de registro também a afetam.
+
+## v2: comparador, radar e mudanças persistentes
+
+- **Comparador** (`GET /v1/comparacao/perfil`, página `/comparar`): até 4 municípios, sempre nos últimos N meses **completos** (6, 12 ou 24) contra os N anteriores.
+  - Mostra contagem e taxa por 100 mil hab. em colunas separadas, para não confundi-las, além da participação de cada tipo no total do município.
+  - Calcula a **razão de taxas** de cada município em relação ao de referência, com IC 95% aproximado: Poisson alargado pela superdispersão das contagens mensais, √φ, com φ = var/média, um valor conservador.
+  - Não corrige diferenças de subnotificação ou de prática de registro. Quando o intervalo inclui 1, o texto diz que a diferença não se distingue da variação aleatória.
+- **Radar e mudanças persistentes:** método, critérios e avaliação em [mudancas.md](mudancas.md).
+- **Comparação entre anos** (aba Tempo e relatório): um traço por ano no eixo jan–dez, usando só meses completos.

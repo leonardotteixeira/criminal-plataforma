@@ -31,10 +31,28 @@ Um teste automatizado (`data/tests/test_pipeline.py`) falha se a silver contiver
 - **Limite mínimo (k = 5)**: qualquer célula, município ou ponto de série com menos de 5 ocorrências no filtro escolhido não é exibido (`SINALBR_K_MIN`).
 - A API só lê as tabelas **gold** (agregados). Não existe endpoint que devolva registros individuais.
 
-### Limites conhecidos da supressão
+### Ataque de diferenciação: evidência e controle (v2)
 
-- Consultas sobrepostas (por exemplo, períodos que diferem em um mês) podem permitir diferenciar contagens pequenas. Mitigação parcial: granularidade mensal mínima e k = 5. Para uso público em produção, avaliar ruído diferencial ou supressão complementar.
+**Problema comprovado.** Com o k = 5 aplicado só ao total do filtro, subtrair duas janelas válidas revelava contagens pequenas. Usando apenas as janelas que o próprio painel oferece (12 meses menos 6 meses), **273 hexágonos de roubo** revelavam uma contagem de 1 a 4 registros num semestre (consulta no `cell_month`, out/2026). Pela API, que aceita qualquer intervalo, a diferença podia isolar um único mês.
+
+**Controle implementado.** Toda contagem por hexágono (mapa e `/v1/export/celulas.csv`) é **arredondada para o múltiplo de 5 mais próximo**, com mínimo de 5 (`SINALBR_CELL_ROUND`). A ordem é esta:
+
+1. o teste k-mínimo é aplicado sobre o valor exato;
+2. só então o valor publicado é arredondado.
+
+A diferença entre duas janelas passa a ter incerteza de ±5. Por exemplo, 12 e 9 viram 10 e 10 (teste `test_cell_rounding_hides_small_differences_between_windows`). O total do mapa aparece como aproximado (≈).
+
+**Risco residual, documentado e não eliminado:**
+
+- O arredondamento determinístico ainda vaza informação quando muitas janelas são combinadas, por exemplo, por limites de arredondamento. A proteção formal seria ruído diferencialmente privado (ex.: geométrico) com orçamento por consulta, o que exige controle de sessões e quebra a reprodutibilidade dos números. Fica para um uso público em produção.
+- **Contagens municipais** (ranking, séries, comparador, Radar, relatórios) são publicadas exatas acima de k. A própria SSP publica estatísticas municipais mensais, e os microdados da fonte são públicos com endereço. O objetivo aqui é **não facilitar** o mapeamento fino de eventos, não proteger mais do que a fonte.
+- Anomalias por hexágono H3 resolução 7 (~5 km², `nivel=h3_7`) expõem contagens semanais exatas, só a partir de 10 registros.
 - Hexágonos com pouca população residente (áreas industriais, rodovias) podem concentrar ocorrências de um mesmo evento. Interprete com cuidado.
+- A tabela `bairro_month` existe no lake, mas **não é exposta pela API**.
+
+### Análises salvas
+
+A função "Salvar visão" grava filtros e URLs só no `localStorage` do navegador. Não há conta, cookie de rastreamento nem envio a servidor.
 
 ## Bases legais e princípios (LGPD)
 
