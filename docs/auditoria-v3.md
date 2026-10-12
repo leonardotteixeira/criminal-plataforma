@@ -43,5 +43,5 @@
 | B Decomposição | `GET /v1/decomposicao` + aba Investigar |
 | C Robustez | `GET /v1/robustez` + aba Investigar |
 | Lighthouse | Medido com Edge (Lighthouse 12): a11y/bp/SEO = 100 em todas as páginas; CLS da página Qualidade corrigido (0,82 → 0,009) |
-| Docker | **Não validado**: `docker` indisponível no ambiente |
-| CI | Workflow validado sintaticamente e comandos executados localmente; não executado no GitHub (sem push) |
+| Docker | Build das 3 imagens validado na CI do GitHub (run 38199724881). `docker compose up` (execução completa com o pipeline) ainda não testado |
+| CI | Primeira execução no GitHub: 4/4 jobs verdes (data, api, web, docker) |

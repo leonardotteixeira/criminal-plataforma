@@ -77,7 +77,7 @@ docker compose up --build
 
 Na primeira vez o `pipeline` baixa ~1 GB da SSP-SP e leva ~15 min; nas seguintes é incremental. Depois: painel em <http://localhost:3000>, API em <http://localhost:8000/docs>. Variáveis em [`.env.example`](.env.example).
 
-> O Compose foi escrito, mas **não foi executado** no ambiente de desenvolvimento (Docker indisponível lá). A CI faz `docker compose build`; se algo falhar na sua máquina, abra uma issue.
+> A CI do GitHub valida o build das três imagens (`docker compose build`). A subida completa (`docker compose up`, que baixa ~1 GB da SSP) ainda não foi executada em um ambiente com Docker; se algo falhar, abra uma issue.
 
 ### Sem Docker
 
