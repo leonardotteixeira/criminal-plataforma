@@ -5,7 +5,7 @@ requires-python = ">=3.11"
 dependencies = ["duckdb>=1.5.6", "fastapi>=0.115", "httpx>=0.28.1", "uvicorn[standard]>=0.30"]
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = ["pytest>=9.2.0", "ruff>=0.6"]
 
 [tool.ruff]
 line-length = 100
